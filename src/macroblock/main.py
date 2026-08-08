@@ -7,7 +7,9 @@ import os
 import sys
 
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QApplication, QMainWindow
+from PySide6.QtWidgets import QApplication
+
+from macroblock.ui.main_window import MainWindow
 
 
 def enable_per_monitor_v2_awareness() -> None:
@@ -21,13 +23,6 @@ def enable_per_monitor_v2_awareness() -> None:
             ctypes.windll.shcore.SetProcessDpiAwareness(2)
         except (AttributeError, OSError):
             ctypes.windll.user32.SetProcessDPIAware()
-
-
-class MainWindow(QMainWindow):
-    def __init__(self) -> None:
-        super().__init__()
-        self.setWindowTitle("Macroblock")
-        self.resize(1100, 720)
 
 
 def main() -> int:
@@ -46,4 +41,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
