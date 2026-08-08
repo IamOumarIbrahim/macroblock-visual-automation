@@ -25,6 +25,14 @@ class ParameterType(str, Enum):
     VALUE = "value"
 
 
+class FlowBehavior(str, Enum):
+    ACTION = "action"
+    ENTRY = "entry"
+    REPEAT = "repeat"
+    REPEAT_FOREVER = "repeat_forever"
+    STOP = "stop"
+
+
 @dataclass(frozen=True, slots=True)
 class ParameterDefinition:
     id: str
@@ -82,6 +90,7 @@ class BlockDefinition:
     is_container: bool = False
     is_entry_point: bool = False
     is_terminal: bool = False
+    flow: FlowBehavior = FlowBehavior.ACTION
 
     def defaults(self) -> dict[str, Any]:
         return {parameter.id: parameter.default for parameter in self.parameters}
@@ -159,4 +168,3 @@ class BlockRegistry:
 
     def blocks_for_category(self, category_id: str) -> tuple[BlockDefinition, ...]:
         return tuple(block for block in self.blocks if block.category == category_id)
-

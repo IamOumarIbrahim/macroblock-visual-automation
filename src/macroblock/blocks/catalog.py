@@ -6,6 +6,7 @@ from macroblock.blocks.registry import (
     BlockDefinition,
     BlockRegistry,
     CategoryDefinition,
+    FlowBehavior as Flow,
     ParameterDefinition as Param,
     ParameterType as Type,
 )
@@ -84,14 +85,18 @@ BLOCKS = (
         "Repeat",
         (Param("count", "Count", Type.INTEGER, 3, minimum=1),),
         is_container=True,
+        flow=Flow.REPEAT,
     ),
     BlockDefinition(
         "control.repeat_until_stopped",
         "control",
         "Repeat Until Stopped",
         is_container=True,
+        flow=Flow.REPEAT_FOREVER,
     ),
-    BlockDefinition("control.stop", "control", "Stop Script", is_terminal=True),
+    BlockDefinition(
+        "control.stop", "control", "Stop Script", is_terminal=True, flow=Flow.STOP
+    ),
     BlockDefinition(
         "variables.set",
         "variables",
@@ -110,10 +115,10 @@ BLOCKS = (
         "When Hotkey Pressed",
         (Param("hotkey", "Hotkey", Type.HOTKEY, "Ctrl+Alt+M"),),
         is_entry_point=True,
+        flow=Flow.ENTRY,
     ),
 )
 
 
 def create_default_registry() -> BlockRegistry:
     return BlockRegistry(CATEGORIES, BLOCKS)
-

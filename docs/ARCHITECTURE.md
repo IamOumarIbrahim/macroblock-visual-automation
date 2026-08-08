@@ -15,6 +15,12 @@ behind a small interface.
 - Canvas positions are optional block metadata in the versioned document. They
   do not affect execution, but preserving them makes a save/load round trip
   restore the visual program exactly.
+- The interpreter owns graph traversal only. Built-in action callbacks live in
+  a handler registry, so adding a definition and registering its behavior does
+  not require changes to the canvas or interpreter core.
+- Execution starts only after the focus-independent Escape monitor signals
+  readiness. Holding Escape for 0.5 seconds sets the same cancellation event
+  used by interruptible wait and loop operations.
 
 ## Future
 
