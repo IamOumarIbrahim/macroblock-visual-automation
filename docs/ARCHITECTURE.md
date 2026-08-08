@@ -21,6 +21,10 @@ behind a small interface.
 - Execution starts only after the focus-independent Escape monitor signals
   readiness. Holding Escape for 0.5 seconds sets the same cancellation event
   used by interruptible wait and loop operations.
+- The cursor tracker is a single virtual-desktop Qt tool window with explicit
+  Win32 layered, transparent, tool-window, and no-activate extended styles.
+  It polls `GetCursorPos` at 16 ms intervals and never depends on application
+  focus or in-window pointer events.
 
 ## Future
 

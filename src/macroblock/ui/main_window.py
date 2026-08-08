@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QHBoxLayout, QMainWindow, QMessageBox, QToolBar, Q
 
 from macroblock.blocks import BlockRegistry, create_default_registry
 from macroblock.engine import ExecutionController
+from macroblock.overlay import CursorOverlay
 from macroblock.ui.canvas import CanvasView
 from macroblock.ui.palette import PalettePanel
 
@@ -28,6 +29,11 @@ class MainWindow(QMainWindow):
         self.stop_action.setEnabled(False)
         self.toolbar.addAction(self.run_action)
         self.toolbar.addAction(self.stop_action)
+        self.toolbar.addSeparator()
+        self.cursor_action = QAction("Show Cursor", self)
+        self.cursor_action.setCheckable(True)
+        self.toolbar.addAction(self.cursor_action)
+        self.cursor_overlay: CursorOverlay | None = None
 
         host = QWidget()
         layout = QHBoxLayout(host)
@@ -46,6 +52,7 @@ class MainWindow(QMainWindow):
         self.execution.failed.connect(self._execution_failed)
         self.run_action.triggered.connect(self.run_script)
         self.stop_action.triggered.connect(self.execution.abort)
+        self.cursor_action.toggled.connect(self._toggle_cursor_overlay)
         self.statusBar().showMessage("Drag blocks from the palette onto the canvas.")
 
     @property
@@ -83,7 +90,21 @@ class MainWindow(QMainWindow):
         self.stop_action.setEnabled(False)
         QMessageBox.critical(self, "Script failed", message)
 
+    def _toggle_cursor_overlay(self, shown: bool) -> None:
+        if shown:
+            if self.cursor_overlay is None:
+                self.cursor_overlay = CursorOverlay()
+            self.cursor_overlay.show_overlay()
+            self.cursor_action.setText("Hide Cursor")
+            self.statusBar().showMessage("Cursor overlay shown — it will not intercept clicks.")
+        else:
+            if self.cursor_overlay is not None:
+                self.cursor_overlay.hide_overlay()
+            self.cursor_action.setText("Show Cursor")
+            self.statusBar().showMessage("Cursor overlay hidden.")
+
     def closeEvent(self, event) -> None:
+        if self.cursor_overlay is not None:
+            self.cursor_overlay.close()
         self.execution.shutdown()
         super().closeEvent(event)
-
