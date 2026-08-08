@@ -19,12 +19,16 @@ from macroblock.ui.block_widgets import PaletteBlockWidget
 
 class PalettePanel(QWidget):
     categoryChanged = Signal(str)
+    blockSelected = Signal(str)
+    blockDragStarted = Signal(str)
+    blockDragFinished = Signal(str, bool)
 
     def __init__(self, registry: BlockRegistry, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.registry = registry
         self.category_buttons: dict[str, QPushButton] = {}
         self.block_widgets: list[PaletteBlockWidget] = []
+        self.selected_type_id: str | None = None
         self.setFixedWidth(300)
 
         root = QVBoxLayout(self)
@@ -78,8 +82,22 @@ class PalettePanel(QWidget):
         self.block_widgets.clear()
         for definition in self.registry.blocks_for_category(category_id):
             widget = PaletteBlockWidget(definition)
+            widget.selected.connect(self.select_block)
+            widget.dragStarted.connect(self._drag_started)
+            widget.dragFinished.connect(self.blockDragFinished)
             self.palette_layout.insertWidget(self.palette_layout.count() - 1, widget)
             self.block_widgets.append(widget)
         self.category_buttons[category_id].setChecked(True)
         self.categoryChanged.emit(category_id)
+        if self.block_widgets:
+            self.select_block(self.block_widgets[0].definition.id)
 
+    def select_block(self, type_id: str) -> None:
+        self.selected_type_id = type_id
+        for widget in self.block_widgets:
+            widget.set_selected(widget.definition.id == type_id)
+        self.blockSelected.emit(type_id)
+
+    def _drag_started(self, type_id: str) -> None:
+        self.select_block(type_id)
+        self.blockDragStarted.emit(type_id)

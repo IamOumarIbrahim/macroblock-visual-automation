@@ -6,8 +6,8 @@ import json
 from collections.abc import Callable
 from typing import Any
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor
+from PySide6.QtCore import QPoint, QRectF, Qt, Signal
+from PySide6.QtGui import QColor, QDrag, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
@@ -44,12 +44,13 @@ class BlockEditorWidget(QFrame):
         self.definition = definition
         self.block = block
         self.editors: dict[str, QWidget] = {}
+        self._visual_state = "normal"
+        self._base_color = QColor(definition.color)
         text_color = _text_color(definition.color)
         self.setObjectName("blockEditor")
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setStyleSheet(
-            "QFrame#blockEditor {"
-            f"background: {definition.color}; border: 2px solid rgba(0,0,0,45);"
-            "border-radius: 10px;}"
+            "QFrame#blockEditor { background: transparent; border: none; }"
             f"QLabel {{ color: {text_color}; font-weight: 600; background: transparent; }}"
             "QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {"
             "background: rgba(255,255,255,235); color: #111827; border: 1px solid rgba(0,0,0,50);"
@@ -58,7 +59,7 @@ class BlockEditorWidget(QFrame):
         self.setMinimumWidth(238)
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(11, 8, 11, 8)
+        root.setContentsMargins(13, 15, 13, 16)
         root.setSpacing(5)
         title = QLabel(definition.display_label)
         title.setObjectName("blockTitle")
@@ -95,6 +96,53 @@ class BlockEditorWidget(QFrame):
                 editor.editingFinished.connect(update)
             root.addLayout(row)
         self.adjustSize()
+
+    def set_visual_state(self, state: str) -> None:
+        if state != self._visual_state:
+            self._visual_state = state
+            self.update()
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        color = QColor(self._base_color)
+        if self._visual_state == "snap":
+            border = QColor("#22C55E")
+            border_width = 4
+            color = color.lighter(108)
+        elif self._visual_state == "selected":
+            border = QColor("#FFFFFF")
+            border_width = 3
+        elif self._visual_state == "hover":
+            border = QColor(255, 255, 255, 185)
+            border_width = 3
+            color = color.lighter(105)
+        else:
+            border = QColor(15, 23, 42, 105)
+            border_width = 2
+
+        body = QRectF(2, 7, self.width() - 4, self.height() - 15)
+        shape = QPainterPath()
+        shape.addRoundedRect(body, 15, 15)
+        # The lower tab and transparent upper socket interlock when snapped,
+        # giving the sequence a compact LEGO/Scratch-like silhouette.
+        tab = QRectF(27, self.height() - 13, 54, 12)
+        shape.addRoundedRect(tab, 6, 6)
+        painter.setPen(QPen(border, border_width))
+        painter.setBrush(color)
+        painter.drawPath(shape)
+
+        socket = QRectF(27, 2, 54, 12)
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Clear)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(Qt.GlobalColor.transparent)
+        painter.drawRoundedRect(socket, 6, 6)
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
+        painter.setPen(QPen(border, 2))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawArc(socket, 0, 180 * 16)
+        painter.end()
+        super().paintEvent(event)
 
     def _create_editor(
         self, parameter: ParameterDefinition, value: Any
@@ -145,33 +193,60 @@ class PaletteBlockWidget(QFrame):
     """Compact, draggable representation of a registered block type."""
 
     MIME_TYPE = "application/x-macroblock-type"
+    HOTSPOT_MIME_TYPE = "application/x-macroblock-hotspot"
+    selected = Signal(str)
+    dragStarted = Signal(str)
+    dragFinished = Signal(str, bool)
 
     def __init__(self, definition: BlockDefinition, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.definition = definition
-        self._press_position = None
+        self._press_position: QPoint | None = None
+        self._drag_started = False
+        self._selected = False
+        self._hovered = False
         self.setCursor(Qt.CursorShape.OpenHandCursor)
-        self.setStyleSheet(
-            f"background: {definition.color}; border-radius: 9px; padding: 5px;"
-        )
+        self.setObjectName("paletteBlock")
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(10, 7, 10, 7)
-        label = QLabel(definition.display_label)
-        label.setStyleSheet(
-            f"color: {_text_color(definition.color)}; font-weight: 650; background: transparent;"
-        )
-        layout.addWidget(label)
+        self.label = QLabel(definition.display_label)
+        self.label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        layout.addWidget(self.label)
+        self._update_style()
 
-    def create_mime_data(self):
+    def set_selected(self, selected: bool) -> None:
+        self._selected = selected
+        self._update_style()
+
+    def _update_style(self) -> None:
+        border = "#FFFFFF" if self._selected else "rgba(15,23,42,75)"
+        width = 3 if self._selected else 1
+        lift = "background" if self._hovered or self._selected else "background"
+        self.setStyleSheet(
+            "QFrame#paletteBlock {"
+            f"{lift}: {self.definition.color}; border: {width}px solid {border};"
+            "border-radius: 11px; padding: 4px;}"
+            f"QLabel {{ color: {_text_color(self.definition.color)}; font-weight: 700;"
+            " background: transparent; border: none; }}"
+        )
+
+    def create_mime_data(self, hotspot: QPoint | None = None):
         from PySide6.QtCore import QMimeData
 
+        hotspot = hotspot or QPoint(12, 12)
         mime = QMimeData()
         mime.setData(self.MIME_TYPE, self.definition.id.encode("utf-8"))
+        mime.setData(
+            self.HOTSPOT_MIME_TYPE,
+            f"{hotspot.x()},{hotspot.y()}".encode("ascii"),
+        )
         return mime
 
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
             self._press_position = event.position().toPoint()
+            self._drag_started = False
             self.setCursor(Qt.CursorShape.ClosedHandCursor)
         super().mousePressEvent(event)
 
@@ -180,14 +255,36 @@ class PaletteBlockWidget(QFrame):
             return super().mouseMoveEvent(event)
         if (event.position().toPoint() - self._press_position).manhattanLength() < 8:
             return
-        from PySide6.QtGui import QDrag
-
+        self._drag_started = True
+        self.selected.emit(self.definition.id)
+        self.dragStarted.emit(self.definition.id)
         drag = QDrag(self)
-        drag.setMimeData(self.create_mime_data())
-        drag.exec(Qt.DropAction.CopyAction)
+        drag.setMimeData(self.create_mime_data(self._press_position))
+        drag.setPixmap(self.grab())
+        drag.setHotSpot(self._press_position)
+        result = drag.exec(Qt.DropAction.CopyAction)
+        self.dragFinished.emit(
+            self.definition.id, result == Qt.DropAction.CopyAction
+        )
         self.setCursor(Qt.CursorShape.OpenHandCursor)
 
     def mouseReleaseEvent(self, event) -> None:
         self.setCursor(Qt.CursorShape.OpenHandCursor)
+        if (
+            event.button() == Qt.MouseButton.LeftButton
+            and self._press_position is not None
+            and not self._drag_started
+        ):
+            self.selected.emit(self.definition.id)
+        self._press_position = None
         super().mouseReleaseEvent(event)
 
+    def enterEvent(self, event) -> None:
+        self._hovered = True
+        self._update_style()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event) -> None:
+        self._hovered = False
+        self._update_style()
+        super().leaveEvent(event)

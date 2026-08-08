@@ -41,8 +41,10 @@ policy changes. Contributors who prefer activation can instead run
 
 ## Use
 
-1. Choose a category at left and drag blocks onto the canvas.
-2. Drop a block near the bottom of another to snap-connect them.
+1. Choose a category at left and drag blocks onto the canvas, or use the
+   always-visible **ADD BLOCK** menu.
+2. **ADD BLOCK** appends to the last block automatically. Dragged blocks show a
+   green snap preview when they are close enough to interlock.
 3. Edit numbers, text, choices, and key lists directly on each block.
 4. Select a block and press Delete, or right-click it to disconnect/delete.
 5. Choose **Run Script**. Hold **Esc for 0.5 seconds** at any time to abort.

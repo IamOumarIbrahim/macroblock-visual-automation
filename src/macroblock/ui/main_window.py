@@ -4,13 +4,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtGui import QAction
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QAction, QActionGroup
 from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QToolBar,
+    QToolButton,
     QWidget,
 )
 
@@ -32,7 +35,47 @@ class MainWindow(QMainWindow):
 
         self.toolbar = QToolBar("Main")
         self.toolbar.setMovable(False)
+        self.toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
         self.addToolBar(self.toolbar)
+        self.selected_block_type = self.registry.blocks[0].id
+        self.block_actions: dict[str, QAction] = {}
+        self.block_action_group = QActionGroup(self)
+        self.block_action_group.setExclusive(True)
+        self.add_block_button = QToolButton()
+        self.add_block_button.setObjectName("addBlockButton")
+        self.add_block_button.setText("ADD BLOCK")
+        self.add_block_button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+        self.add_block_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.add_block_button.setStyleSheet(
+            "QToolButton#addBlockButton { background: #2563EB; color: white;"
+            " border: none; border-radius: 9px; padding: 7px 15px;"
+            " font-weight: 800; letter-spacing: 0.5px; }"
+            "QToolButton#addBlockButton:hover { background: #1D4ED8; }"
+            "QToolButton#addBlockButton:pressed { background: #1E40AF; }"
+            "QToolButton#addBlockButton::menu-button { width: 22px; border-left:"
+            " 1px solid rgba(255,255,255,80); border-radius: 0 9px 9px 0; }"
+        )
+        add_menu = QMenu(self.add_block_button)
+        for category in self.registry.categories:
+            category_menu = add_menu.addMenu(category.label)
+            category_menu.setStyleSheet(
+                f"QMenu::item:selected {{ background: {category.color}; color: white; }}"
+            )
+            for definition in self.registry.blocks_for_category(category.id):
+                action = category_menu.addAction(definition.display_label)
+                action.setCheckable(True)
+                action.setData(definition.id)
+                action.triggered.connect(
+                    lambda _checked=False, type_id=definition.id: self._choose_and_add_block(
+                        type_id
+                    )
+                )
+                self.block_action_group.addAction(action)
+                self.block_actions[definition.id] = action
+        self.add_block_button.setMenu(add_menu)
+        self.add_block_button.clicked.connect(self.add_selected_block)
+        self.toolbar.addWidget(self.add_block_button)
+        self.toolbar.addSeparator()
         self.load_action = QAction("Load", self)
         self.save_action = QAction("Save", self)
         self.toolbar.addAction(self.load_action)
@@ -62,6 +105,10 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(host)
 
         self.canvas.canvas_scene.warningChanged.connect(self._show_warning)
+        self.canvas.interactionMessage.connect(self.statusBar().showMessage)
+        self.palette.blockSelected.connect(self.select_block_type)
+        self.palette.blockDragStarted.connect(self._palette_drag_started)
+        self.palette.blockDragFinished.connect(self._palette_drag_finished)
         self.execution = ExecutionController(self.registry, parent=self)
         self.execution.started.connect(self._execution_started)
         self.execution.finished.connect(self._execution_finished)
@@ -71,16 +118,48 @@ class MainWindow(QMainWindow):
         self.cursor_action.toggled.connect(self._toggle_cursor_overlay)
         self.load_action.triggered.connect(self.choose_load_script)
         self.save_action.triggered.connect(self.choose_save_script)
-        self.statusBar().showMessage("Drag blocks from the palette onto the canvas.")
+        self.select_block_type(self.palette.selected_type_id or self.selected_block_type)
+        self.statusBar().showMessage(
+            "Choose a block and drag it in, or use ADD BLOCK for an automatic sequence."
+        )
 
     @property
     def graph(self):
         return self.canvas.canvas_scene.graph
 
     def _show_warning(self, warning: str) -> None:
-        self.statusBar().showMessage(
-            warning or "Drag blocks from the palette onto the canvas."
+        if warning:
+            self.statusBar().showMessage(warning)
+
+    def select_block_type(self, type_id: str) -> None:
+        self.selected_block_type = type_id
+        definition = self.registry.block(type_id)
+        action = self.block_actions.get(type_id)
+        if action:
+            action.setChecked(True)
+        self.add_block_button.setToolTip(
+            f"Add {definition.display_label}; click the arrow to choose another block."
         )
+
+    def _choose_and_add_block(self, type_id: str) -> None:
+        self.select_block_type(type_id)
+        self.add_selected_block()
+
+    def add_selected_block(self) -> None:
+        self.canvas.add_block_from_toolbar(self.selected_block_type)
+
+    def _palette_drag_started(self, type_id: str) -> None:
+        self.select_block_type(type_id)
+        label = self.registry.block(type_id).display_label
+        self.statusBar().showMessage(
+            f"Dragging {label} — move over the canvas; green feedback means snap-ready."
+        )
+
+    def _palette_drag_finished(self, _type_id: str, dropped: bool) -> None:
+        if not dropped:
+            self.statusBar().showMessage(
+                "Drag cancelled — use ADD BLOCK if you prefer automatic placement."
+            )
 
     def run_script(self) -> None:
         if not self.graph.blocks:

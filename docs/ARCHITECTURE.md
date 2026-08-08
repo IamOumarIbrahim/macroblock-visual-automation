@@ -31,6 +31,10 @@ behind a small interface.
   same-directory temporary file plus `os.replace` so interruption cannot leave
   a partially written destination. Loading validates every block and reference
   before replacing the current canvas.
+- The canvas keeps a transient `last_added_id` for the toolbar's append flow.
+  Drag-and-drop remains free-positioned, but both palette drops and existing
+  block moves share one proximity-snap function. Drag hotspots are stored in
+  MIME data so the block lands under the preview instead of under its corner.
 
 ## Future
 

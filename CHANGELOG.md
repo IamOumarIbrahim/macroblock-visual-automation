@@ -6,6 +6,15 @@ All notable changes to Macroblock will be documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Added an always-visible **ADD BLOCK** menu that appends each selection to the
+  last-added block while leaving the first block unconnected.
+- Improved palette dragging with a visible drag preview, hotspot-correct drop
+  placement, live snap-ready feedback, and automatic proximity snapping.
+- Redesigned canvas blocks with rounded LEGO-like tabs and sockets over a
+  subtle dotted workspace pattern.
+
 ### Added
 
 - Data-driven Mouse, Keyboard, Timing, Control, Variables, and Events blocks.
