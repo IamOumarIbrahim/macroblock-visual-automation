@@ -2,12 +2,22 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtGui import QAction
-from PySide6.QtWidgets import QHBoxLayout, QMainWindow, QMessageBox, QToolBar, QWidget
+from PySide6.QtWidgets import (
+    QFileDialog,
+    QHBoxLayout,
+    QMainWindow,
+    QMessageBox,
+    QToolBar,
+    QWidget,
+)
 
 from macroblock.blocks import BlockRegistry, create_default_registry
 from macroblock.engine import ExecutionController
 from macroblock.overlay import CursorOverlay
+from macroblock.persistence import PersistenceError, load_script, save_script
 from macroblock.ui.canvas import CanvasView
 from macroblock.ui.palette import PalettePanel
 
@@ -23,6 +33,11 @@ class MainWindow(QMainWindow):
         self.toolbar = QToolBar("Main")
         self.toolbar.setMovable(False)
         self.addToolBar(self.toolbar)
+        self.load_action = QAction("Load", self)
+        self.save_action = QAction("Save", self)
+        self.toolbar.addAction(self.load_action)
+        self.toolbar.addAction(self.save_action)
+        self.toolbar.addSeparator()
         self.run_action = QAction("Run Script", self)
         self.run_action.setToolTip("Run in the background (hold Esc for 0.5 seconds to abort)")
         self.stop_action = QAction("Stop", self)
@@ -34,6 +49,7 @@ class MainWindow(QMainWindow):
         self.cursor_action.setCheckable(True)
         self.toolbar.addAction(self.cursor_action)
         self.cursor_overlay: CursorOverlay | None = None
+        self.current_file: Path | None = None
 
         host = QWidget()
         layout = QHBoxLayout(host)
@@ -53,6 +69,8 @@ class MainWindow(QMainWindow):
         self.run_action.triggered.connect(self.run_script)
         self.stop_action.triggered.connect(self.execution.abort)
         self.cursor_action.toggled.connect(self._toggle_cursor_overlay)
+        self.load_action.triggered.connect(self.choose_load_script)
+        self.save_action.triggered.connect(self.choose_save_script)
         self.statusBar().showMessage("Drag blocks from the palette onto the canvas.")
 
     @property
@@ -102,6 +120,52 @@ class MainWindow(QMainWindow):
                 self.cursor_overlay.hide_overlay()
             self.cursor_action.setText("Show Cursor")
             self.statusBar().showMessage("Cursor overlay hidden.")
+
+    def choose_save_script(self) -> None:
+        suggested = str(self.current_file) if self.current_file else f"{self.graph.name}.mbk"
+        path, _selected_filter = QFileDialog.getSaveFileName(
+            self,
+            "Save Macroblock Script",
+            suggested,
+            "Macroblock Scripts (*.mbk);;JSON Files (*.json);;All Files (*)",
+        )
+        if path:
+            if not Path(path).suffix:
+                path += ".mbk"
+            self.save_script_path(path)
+
+    def choose_load_script(self) -> None:
+        path, _selected_filter = QFileDialog.getOpenFileName(
+            self,
+            "Load Macroblock Script",
+            str(self.current_file.parent) if self.current_file else "",
+            "Macroblock Scripts (*.mbk);;JSON Files (*.json);;All Files (*)",
+        )
+        if path:
+            self.load_script_path(path)
+
+    def save_script_path(self, path: str | Path) -> bool:
+        try:
+            saved = save_script(path, self.graph, self.registry)
+        except PersistenceError as error:
+            QMessageBox.critical(self, "Unable to save script", str(error))
+            return False
+        self.current_file = saved
+        self.setWindowTitle(f"Macroblock — {self.graph.name}")
+        self.statusBar().showMessage(f"Saved {saved.name}.")
+        return True
+
+    def load_script_path(self, path: str | Path) -> bool:
+        try:
+            graph = load_script(path, self.registry)
+        except PersistenceError as error:
+            QMessageBox.critical(self, "Unable to load script", str(error))
+            return False
+        self.canvas.canvas_scene.load_graph(graph)
+        self.current_file = Path(path)
+        self.setWindowTitle(f"Macroblock — {graph.name}")
+        self.statusBar().showMessage(f"Loaded {self.current_file.name}.")
+        return True
 
     def closeEvent(self, event) -> None:
         if self.cursor_overlay is not None:

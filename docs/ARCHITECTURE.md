@@ -25,6 +25,10 @@ behind a small interface.
   Win32 layered, transparent, tool-window, and no-activate extended styles.
   It polls `GetCursorPos` at 16 ms intervals and never depends on application
   focus or in-window pointer events.
+- `.mbk` files are versioned UTF-8 JSON and remain entirely local. Saves use a
+  same-directory temporary file plus `os.replace` so interruption cannot leave
+  a partially written destination. Loading validates every block and reference
+  before replacing the current canvas.
 
 ## Future
 

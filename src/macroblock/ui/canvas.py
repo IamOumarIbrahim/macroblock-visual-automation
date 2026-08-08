@@ -102,12 +102,30 @@ class CanvasScene(QGraphicsScene):
             y=position.y(),
         )
         self.graph.add(block)
-        item = BlockGraphicsItem(self, self.registry.block(type_id), block)
-        self.addItem(item)
-        item.setPos(position)
-        self.block_items[block.instance_id] = item
+        item = self._add_existing_block(block)
         self.on_graph_changed()
         return item
+
+    def _add_existing_block(self, block: BlockInstance) -> BlockGraphicsItem:
+        item = BlockGraphicsItem(self, self.registry.block(block.type_id), block)
+        self.addItem(item)
+        item.setPos(QPointF(block.x, block.y))
+        self.block_items[block.instance_id] = item
+        return item
+
+    def load_graph(self, graph: ScriptGraph) -> None:
+        graph.validate(self.registry)
+        snapshot = ScriptGraph.from_dict(graph.to_dict(), self.registry)
+        for connection in self.connection_items:
+            self.removeItem(connection)
+        self.connection_items.clear()
+        for item in self.block_items.values():
+            self.removeItem(item)
+        self.block_items.clear()
+        self.graph = snapshot
+        for block in self.graph.blocks:
+            self._add_existing_block(block)
+        self.on_graph_changed()
 
     def connect_blocks(self, previous_id: str, next_id: str, *, as_child: bool = False) -> None:
         if previous_id == next_id:
@@ -285,4 +303,3 @@ class CanvasView(QGraphicsView):
             if selected:
                 return
         super().keyPressEvent(event)
-
