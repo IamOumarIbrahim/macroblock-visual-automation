@@ -14,6 +14,8 @@ into a sequence, and run the result without writing code.
 - Mouse movement, clicks, drags, and scrolling through Win32 `SendInput`
 - Key presses, Unicode text, and key combinations
 - Waits, counted and until-stopped loops, variables, and event entry blocks
+- Expandable C-shaped loops that visibly encapsulate complete block stacks,
+  including other nested loops
 - A global safety abort: hold **Esc for 0.5 seconds** while a script is running
 - A topmost, click-through crosshair with live physical-pixel coordinates
 - Versioned, local-only `.mbk` save files
@@ -45,11 +47,15 @@ policy changes. Contributors who prefer activation can instead run
    always-visible **ADD BLOCK** menu.
 2. **ADD BLOCK** appends to the last block automatically. Dragged blocks show a
    green snap preview when they are close enough to interlock.
-3. Edit numbers, text, choices, and key lists directly on each block.
-4. Select a block and press Delete, or right-click it to disconnect/delete.
-5. Choose **Run Script**. Hold **Esc for 0.5 seconds** at any time to abort.
-6. Use **Show Cursor** to read screen coordinates without blocking clicks.
-7. Save and load local scripts with the `.mbk` format.
+3. Drag a block into a loop's open cavity to nest it. The loop expands around
+   its child stack; drop at its lower connector to place the block after it.
+4. Moving a connected block moves its entire child/next stack. Dropping on an
+   occupied connector inserts the stack without discarding existing blocks.
+5. Edit numbers, text, choices, and key lists directly on each block.
+6. Select a block and press Delete, or right-click it to disconnect/delete.
+7. Choose **Run Script**. Hold **Esc for 0.5 seconds** at any time to abort.
+8. Use **Show Cursor** to read screen coordinates without blocking clicks.
+9. Save and load local scripts with the `.mbk` format.
 
 Coordinates outside every connected monitor are skipped and logged instead of
 being sent. Macroblock also refuses to start execution if its global abort

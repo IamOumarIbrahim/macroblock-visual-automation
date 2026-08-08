@@ -78,9 +78,13 @@ def create_builtin_handlers() -> BlockHandlerRegistry:
 
     def change_variable(block: BlockInstance, context: "ExecutionContext") -> None:
         name = block.params["name"]
-        context.variables[name] = context.variables.get(name, 0) + block.params["by"]
+        current = context.variables.get(name, 0)
+        if isinstance(current, bool) or not isinstance(current, (int, float)):
+            raise ValueError(
+                f"Variable '{name}' contains {current!r} and cannot be changed numerically."
+            )
+        context.variables[name] = current + block.params["by"]
 
     handlers.register("variables.set", set_variable)
     handlers.register("variables.change", change_variable)
     return handlers
-

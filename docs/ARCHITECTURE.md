@@ -11,7 +11,8 @@ behind a small interface.
 - A startup call declares Per-Monitor-V2 DPI awareness before creating Qt.
 - Script graphs are directed top-to-bottom chains. Container blocks have a
   `child` reference to the first block in their body, so control blocks can be
-  nested without introducing graph cycles.
+  nested without introducing graph cycles. Validation enforces one incoming
+  reference per block and rejects cycles before layout or execution.
 - Canvas positions are optional block metadata in the versioned document. They
   do not affect execution, but preserving them makes a save/load round trip
   restore the visual program exactly.
@@ -35,6 +36,15 @@ behind a small interface.
   Drag-and-drop remains free-positioned, but both palette drops and existing
   block moves share one proximity-snap function. Drag hotspots are stored in
   MIME data so the block lands under the preview instead of under its corner.
+- A snap destination identifies both an owner and a reference kind: `next`
+  inserts into the surrounding sequence, while `child` enters an empty
+  container. Filled cavities resolve to the tail of their child chain. The
+  recursive layout pass sizes each C-shaped container around the full bounds
+  of its child sequence, so nesting composes at arbitrary depth.
+- Connection edits preserve structure. A dropped stack is inserted ahead of
+  an occupied reference, moving a head translates all reachable descendants,
+  and deletion splices the surrounding `next` chain while leaving container
+  children as an independent root.
 
 ## Future
 

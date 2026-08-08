@@ -66,6 +66,53 @@ def test_executor_walks_nested_graph_and_variables() -> None:
     assert result.executed_blocks == 6
 
 
+def test_executor_runs_recursively_nested_repeat_blocks() -> None:
+    registry = create_default_registry()
+    outer = BlockInstance.create(
+        registry, "control.repeat", instance_id="outer", params={"count": 2}
+    )
+    inner = BlockInstance.create(
+        registry, "control.repeat", instance_id="inner", params={"count": 3}
+    )
+    click = BlockInstance.create(
+        registry, "mouse.click", instance_id="click"
+    )
+    outer.child_id = inner.instance_id
+    inner.child_id = click.instance_id
+    fake = FakeInput()
+
+    result = ScriptExecutor(registry, fake).execute(
+        ScriptGraph.from_blocks("Nested loops", [outer, inner, click]),
+        threading.Event(),
+    )
+
+    assert result.status == "completed"
+    assert fake.actions == [("click", "left", 1)] * 6
+
+
+def test_change_variable_reports_a_clear_type_error() -> None:
+    registry = create_default_registry()
+    set_value = BlockInstance.create(
+        registry,
+        "variables.set",
+        instance_id="set",
+        params={"name": "score", "value": "many"},
+    )
+    change = BlockInstance.create(
+        registry,
+        "variables.change",
+        instance_id="change",
+        params={"name": "score", "by": 1},
+    )
+    set_value.next_id = change.instance_id
+
+    with pytest.raises(ValueError, match="cannot be changed numerically"):
+        ScriptExecutor(registry, FakeInput()).execute(
+            ScriptGraph.from_blocks("Bad variable", [set_value, change]),
+            threading.Event(),
+        )
+
+
 def test_controller_refuses_to_run_without_ready_abort_monitor() -> None:
     registry = create_default_registry()
     wait = BlockInstance.create(

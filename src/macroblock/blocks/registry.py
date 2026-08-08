@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import copy
+import math
 from dataclasses import dataclass, replace
 from enum import Enum
 from typing import Any, Iterable, Mapping
@@ -46,7 +48,11 @@ class ParameterDefinition:
         if self.type is ParameterType.INTEGER:
             valid = isinstance(value, int) and not isinstance(value, bool)
         elif self.type is ParameterType.NUMBER:
-            valid = isinstance(value, (int, float)) and not isinstance(value, bool)
+            valid = (
+                isinstance(value, (int, float))
+                and not isinstance(value, bool)
+                and math.isfinite(value)
+            )
         elif self.type in (ParameterType.TEXT, ParameterType.HOTKEY):
             valid = isinstance(value, str)
         elif self.type is ParameterType.CHOICE:
@@ -57,7 +63,10 @@ class ParameterDefinition:
                 and all(isinstance(item, str) and item for item in value)
             )
         else:
-            valid = value is None or isinstance(value, (str, int, float, bool))
+            valid = value is None or (
+                isinstance(value, (str, int, float, bool))
+                and not (isinstance(value, float) and not math.isfinite(value))
+            )
 
         if not valid:
             raise BlockDefinitionError(
@@ -93,7 +102,10 @@ class BlockDefinition:
     flow: FlowBehavior = FlowBehavior.ACTION
 
     def defaults(self) -> dict[str, Any]:
-        return {parameter.id: parameter.default for parameter in self.parameters}
+        return {
+            parameter.id: copy.deepcopy(parameter.default)
+            for parameter in self.parameters
+        }
 
     def validate_params(self, params: Mapping[str, Any]) -> None:
         expected = {parameter.id for parameter in self.parameters}

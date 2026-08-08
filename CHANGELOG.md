@@ -14,6 +14,12 @@ All notable changes to Macroblock will be documented here. The format follows
   placement, live snap-ready feedback, and automatic proximity snapping.
 - Redesigned canvas blocks with rounded LEGO-like tabs and sockets over a
   subtle dotted workspace pattern.
+- Added recursively expanding C-shaped loop blocks with explicit inside and
+  after-loop drop targets, including visual support for nested loops.
+- Connected stacks now move together; occupied connectors insert without
+  orphaning their old chain, and deletion repairs surrounding connections.
+- Strengthened document validation for cycles, multiple parents, malformed
+  block entries, non-finite values/positions, and shared mutable defaults.
 
 ### Added
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 
 from PySide6.QtCore import QLineF, QPoint, QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QKeyEvent, QPainter, QPainterPath, QPen
@@ -32,6 +33,7 @@ class BlockGraphicsItem(QGraphicsProxyWidget):
         self.canvas_scene = scene
         self.block = block
         self._drag_start = QPointF()
+        self._dragged_positions: dict[str, QPointF] = {}
         self._detached = False
         self._hovered = False
         self._snap_target = False
@@ -72,6 +74,9 @@ class BlockGraphicsItem(QGraphicsProxyWidget):
 
     def mousePressEvent(self, event) -> None:
         self._drag_start = self.pos()
+        self._dragged_positions = self.canvas_scene.connected_positions(
+            self.block.instance_id
+        )
         self._detached = False
         self.setCursor(Qt.CursorShape.ClosedHandCursor)
         self.setZValue(10)
@@ -83,6 +88,11 @@ class BlockGraphicsItem(QGraphicsProxyWidget):
             if not self._detached:
                 self.canvas_scene.disconnect_incoming(self.block.instance_id)
                 self._detached = True
+            self.canvas_scene.move_connected_items(
+                self.block.instance_id,
+                self._dragged_positions,
+                self.pos() - self._drag_start,
+            )
             self.canvas_scene.preview_snap_for_item(self)
 
     def mouseReleaseEvent(self, event) -> None:
@@ -90,6 +100,7 @@ class BlockGraphicsItem(QGraphicsProxyWidget):
         self.setCursor(Qt.CursorShape.OpenHandCursor)
         self.setZValue(1)
         self.canvas_scene.snap_item(self)
+        self._dragged_positions.clear()
 
     def hoverEnterEvent(self, event) -> None:
         self._hovered = True
@@ -106,7 +117,8 @@ class BlockGraphicsItem(QGraphicsProxyWidget):
         if change == self.GraphicsItemChange.ItemPositionHasChanged:
             self.block.x = float(value.x())
             self.block.y = float(value.y())
-            self.canvas_scene.refresh_connections()
+            if not self.canvas_scene._layout_in_progress:
+                self.canvas_scene.refresh_connections()
         elif change == self.GraphicsItemChange.ItemSelectedHasChanged:
             self._sync_visual_state()
         return result
@@ -122,6 +134,18 @@ class BlockGraphicsItem(QGraphicsProxyWidget):
             self.canvas_scene.delete_block(self.block.instance_id)
 
 
+@dataclass(frozen=True)
+class SnapMatch:
+    """A resolved snap destination, including container-cavity targets."""
+
+    owner_id: str
+    kind: str
+    highlight_id: str
+    expected_position: QPointF
+    distance: float
+    inside: bool = False
+
+
 class CanvasScene(QGraphicsScene):
     graphChanged = Signal()
     warningChanged = Signal(str)
@@ -130,6 +154,8 @@ class CanvasScene(QGraphicsScene):
     SNAP_DISTANCE = 92.0
     BLOCK_GAP = -7.0
     CONNECTOR_X = 54.0
+    CONTAINER_INDENT = 31.0
+    CONTAINER_RIGHT_PADDING = 14.0
 
     def __init__(self, registry: BlockRegistry, parent=None) -> None:
         super().__init__(parent)
@@ -140,6 +166,7 @@ class CanvasScene(QGraphicsScene):
         self.snap_preview_item: QGraphicsPathItem | None = None
         self._snap_target_id: str | None = None
         self.last_added_id: str | None = None
+        self._layout_in_progress = False
         self.setSceneRect(-2000, -2000, 6000, 6000)
 
     def add_block(
@@ -203,31 +230,39 @@ class CanvasScene(QGraphicsScene):
         for block in self.graph.blocks:
             self._add_existing_block(block)
         self.last_added_id = self.graph.blocks[-1].instance_id if self.graph.blocks else None
+        self.relayout_all()
         self.on_graph_changed()
 
-    def connect_blocks(self, previous_id: str, next_id: str, *, as_child: bool = False) -> None:
+    def connect_blocks(
+        self, previous_id: str, next_id: str, *, as_child: bool = False
+    ) -> None:
+        """Insert a block stack after a block or at the front of a container."""
+
         if previous_id == next_id:
             raise ValueError("A block cannot connect to itself.")
         blocks = self.graph.block_map()
         previous = blocks[previous_id]
+        field = "child_id" if as_child else "next_id"
+        if as_child and not self.registry.block(previous.type_id).is_container:
+            raise ValueError("Only a container block can own a child chain.")
+        if getattr(previous, field) == next_id:
+            self.relayout_component(previous_id)
+            self.on_graph_changed()
+            return
         if self._would_cycle(previous_id, next_id):
             raise ValueError("That connection would create a graph cycle.")
+
+        displaced_id = getattr(previous, field)
         self.disconnect_incoming(next_id, notify=False)
-        if as_child:
-            if not self.registry.block(previous.type_id).is_container:
-                raise ValueError("Only a container block can own a child chain.")
-            previous.child_id = next_id
-        else:
-            previous.next_id = next_id
-        previous_item = self.block_items[previous_id]
-        next_item = self.block_items[next_id]
-        indent = 28.0 if as_child else 0.0
-        next_item.setPos(
-            previous_item.x() + indent,
-            previous_item.y()
-            + previous_item.boundingRect().height()
-            + self.BLOCK_GAP,
-        )
+        setattr(previous, field, next_id)
+
+        # Preserve an occupied connector by inserting the dragged stack above
+        # its former content, matching a physical stack of blocks.
+        if displaced_id and displaced_id not in self.sequence_ids(next_id):
+            tail = blocks[self.sequence_tail(next_id)]
+            tail.next_id = displaced_id
+
+        self.relayout_component(previous_id)
         self.on_graph_changed()
 
     def _would_cycle(self, previous_id: str, next_id: str) -> bool:
@@ -245,39 +280,247 @@ class CanvasScene(QGraphicsScene):
             pending.extend(ref for ref in (current.next_id, current.child_id) if ref)
         return False
 
-    def disconnect_incoming(self, block_id: str, *, notify: bool = True) -> None:
-        changed = False
+    def incoming_reference(self, block_id: str) -> tuple[str, str] | None:
         for block in self.graph.blocks:
             if block.next_id == block_id:
-                block.next_id = None
-                changed = True
+                return block.instance_id, "next"
             if block.child_id == block_id:
-                block.child_id = None
-                changed = True
-        if changed and notify:
-            self.interactionMessage.emit("Block detached — move it near another block to snap.")
+                return block.instance_id, "child"
+        return None
+
+    def sequence_ids(self, start_id: str | None) -> list[str]:
+        blocks = self.graph.block_map()
+        sequence: list[str] = []
+        seen: set[str] = set()
+        current_id = start_id
+        while current_id and current_id not in seen:
+            sequence.append(current_id)
+            seen.add(current_id)
+            current_id = blocks[current_id].next_id
+        return sequence
+
+    def sequence_tail(self, start_id: str) -> str:
+        return self.sequence_ids(start_id)[-1]
+
+    def connected_ids(self, start_id: str) -> set[str]:
+        blocks = self.graph.block_map()
+        pending = [start_id]
+        connected: set[str] = set()
+        while pending:
+            block_id = pending.pop()
+            if block_id in connected:
+                continue
+            connected.add(block_id)
+            block = blocks[block_id]
+            pending.extend(ref for ref in (block.next_id, block.child_id) if ref)
+        return connected
+
+    def connected_positions(self, start_id: str) -> dict[str, QPointF]:
+        return {
+            block_id: QPointF(self.block_items[block_id].pos())
+            for block_id in self.connected_ids(start_id)
+            if block_id in self.block_items
+        }
+
+    def move_connected_items(
+        self,
+        source_id: str,
+        starting_positions: dict[str, QPointF],
+        delta: QPointF,
+    ) -> None:
+        self._layout_in_progress = True
+        try:
+            for block_id, start in starting_positions.items():
+                if block_id != source_id and block_id in self.block_items:
+                    self.block_items[block_id].setPos(start + delta)
+        finally:
+            self._layout_in_progress = False
+        self.refresh_connections()
+
+    def disconnect_incoming(
+        self, block_id: str, *, notify: bool = True
+    ) -> tuple[str, str] | None:
+        incoming = self.incoming_reference(block_id)
+        if incoming is None:
+            return None
+        owner_id, kind = incoming
+        owner = self.graph.block_map()[owner_id]
+        setattr(owner, "child_id" if kind == "child" else "next_id", None)
+        self.relayout_component(owner_id)
+        if notify:
+            self.interactionMessage.emit(
+                "Block stack detached — move it near a connector or loop cavity to snap."
+            )
             self.on_graph_changed()
+        return incoming
 
     def delete_block(self, block_id: str) -> None:
         self.clear_snap_preview()
-        self.disconnect_incoming(block_id, notify=False)
-        block = self.graph.block_map()[block_id]
+        blocks = self.graph.block_map()
+        block = blocks[block_id]
+        incoming = self.incoming_reference(block_id)
+        old_position = QPointF(self.block_items[block_id].pos())
+        old_width = self.block_items[block_id].boundingRect().width()
+        successor_id = block.next_id
+        child_id = block.child_id
+
+        if incoming:
+            owner_id, kind = incoming
+            owner = blocks[owner_id]
+            setattr(
+                owner,
+                "child_id" if kind == "child" else "next_id",
+                successor_id,
+            )
+        elif successor_id:
+            self.block_items[successor_id].setPos(old_position)
+
+        # Removing a C block must not delete its body. Its former child stack
+        # becomes an independent root beside the repaired sequence.
+        if child_id:
+            child_position = (
+                old_position + QPointF(old_width + 38, 0)
+                if successor_id or incoming
+                else old_position
+            )
+            self.block_items[child_id].setPos(child_position)
+
+        block.next_id = None
+        block.child_id = None
         self.graph.blocks.remove(block)
         item = self.block_items.pop(block_id)
         self.removeItem(item)
         if self.last_added_id == block_id:
-            self.last_added_id = (
-                self.graph.blocks[-1].instance_id if self.graph.blocks else None
-            )
-        self.interactionMessage.emit("Block deleted.")
+            self.last_added_id = successor_id or child_id
+            if self.last_added_id is None and self.graph.blocks:
+                self.last_added_id = self.graph.blocks[-1].instance_id
+        self.relayout_all()
+        self.interactionMessage.emit("Block deleted; connected blocks were preserved.")
         self.on_graph_changed()
+
+    def _component_root(self, block_id: str) -> str:
+        current_id = block_id
+        seen: set[str] = set()
+        while current_id not in seen:
+            seen.add(current_id)
+            incoming = self.incoming_reference(current_id)
+            if incoming is None:
+                return current_id
+            current_id = incoming[0]
+        return block_id
+
+    def relayout_component(self, block_id: str) -> None:
+        if block_id not in self.block_items:
+            return
+        root_id = self._component_root(block_id)
+        root_position = QPointF(self.block_items[root_id].pos())
+        self._layout_in_progress = True
+        try:
+            self._layout_sequence(
+                root_id,
+                root_position.x(),
+                root_position.y(),
+                set(),
+                depth=0,
+            )
+        finally:
+            self._layout_in_progress = False
+        self.refresh_connections()
+
+    def relayout_all(self) -> None:
+        referenced = {
+            ref
+            for block in self.graph.blocks
+            for ref in (block.next_id, block.child_id)
+            if ref
+        }
+        roots = [
+            block.instance_id
+            for block in self.graph.blocks
+            if block.instance_id not in referenced
+        ]
+        visited: set[str] = set()
+        self._layout_in_progress = True
+        try:
+            for root_id in roots:
+                item = self.block_items[root_id]
+                self._layout_sequence(
+                    root_id,
+                    item.x(),
+                    item.y(),
+                    visited,
+                    depth=0,
+                )
+        finally:
+            self._layout_in_progress = False
+        self.refresh_connections()
+
+    def _layout_sequence(
+        self,
+        start_id: str,
+        x: float,
+        y: float,
+        visited: set[str],
+        *,
+        depth: int,
+    ) -> tuple[float, float]:
+        blocks = self.graph.block_map()
+        current_id: str | None = start_id
+        cursor_y = y
+        max_right = x
+        while current_id and current_id not in visited:
+            visited.add(current_id)
+            block = blocks[current_id]
+            item = self.block_items[current_id]
+            definition = self.registry.block(block.type_id)
+            item.setPos(QPointF(x, cursor_y))
+            item.setZValue(depth + 1)
+
+            child_right = x
+            if definition.is_container:
+                editor = item.editor
+                if block.child_id:
+                    child_height, child_right = self._layout_sequence(
+                        block.child_id,
+                        x + self.CONTAINER_INDENT,
+                        cursor_y + editor.container_child_y,
+                        visited,
+                        depth=depth + 1,
+                    )
+                    editor.set_container_layout(
+                        child_height,
+                        child_right - x + self.CONTAINER_RIGHT_PADDING,
+                        has_children=True,
+                    )
+                else:
+                    editor.set_container_layout(
+                        editor.EMPTY_CONTAINER_BODY_HEIGHT,
+                        editor._natural_width + 34,
+                        has_children=False,
+                    )
+                # QGraphicsProxyWidget does not reliably pick up a QWidget
+                # resize that occurs after setWidget(); keep its scene
+                # geometry in lockstep so wide/deep C blocks are not clipped.
+                proxy_width = float(editor.width())
+                proxy_height = float(editor.height())
+                item.setMinimumSize(proxy_width, proxy_height)
+                item.setMaximumSize(proxy_width, proxy_height)
+                item.resize(proxy_width, proxy_height)
+
+            height = float(item.editor.height())
+            width = float(item.editor.width())
+            max_right = max(max_right, x + width, child_right)
+            cursor_y += height + self.BLOCK_GAP
+            current_id = block.next_id
+
+        return max(0.0, cursor_y - y - self.BLOCK_GAP), max_right
 
     def find_snap_target_for_position(
         self, position: QPointF, *, exclude_id: str | None = None
-    ) -> tuple[str, float] | None:
-        best: tuple[str, float] | None = None
+    ) -> SnapMatch | None:
+        matches: list[tuple[tuple[float, float, float], SnapMatch]] = []
         for target_id, target in self.block_items.items():
-            if target_id == exclude_id or target.block.next_id is not None:
+            if target_id == exclude_id:
                 continue
             if exclude_id and self._would_cycle(target_id, exclude_id):
                 continue
@@ -286,11 +529,62 @@ class CanvasScene(QGraphicsScene):
                 target.y() + target.boundingRect().height() + self.BLOCK_GAP,
             )
             distance = QLineF(position, expected).length()
-            if distance <= self.SNAP_DISTANCE and (
-                best is None or distance < best[1]
-            ):
-                best = (target_id, distance)
-        return best
+            if distance <= self.SNAP_DISTANCE:
+                match = SnapMatch(
+                    target_id,
+                    "next",
+                    target_id,
+                    expected,
+                    distance,
+                    inside=False,
+                )
+                matches.append(((1.0, distance, 0.0), match))
+
+            definition = self.registry.block(target.block.type_id)
+            if not definition.is_container:
+                continue
+            cavity = target.editor.container_body_rect().translated(target.pos())
+            inside_cavity = cavity.adjusted(-12, -12, 12, 12).contains(position)
+            if target.block.child_id:
+                owner_id = self.sequence_tail(target.block.child_id)
+                owner_item = self.block_items[owner_id]
+                inside_expected = QPointF(
+                    owner_item.x(),
+                    owner_item.y()
+                    + owner_item.boundingRect().height()
+                    + self.BLOCK_GAP,
+                )
+                kind = "next"
+            else:
+                owner_id = target_id
+                inside_expected = target.pos() + QPointF(
+                    self.CONTAINER_INDENT,
+                    target.editor.container_child_y,
+                )
+                kind = "child"
+            if exclude_id and self._would_cycle(owner_id, exclude_id):
+                continue
+            inside_distance = QLineF(position, inside_expected).length()
+            if inside_cavity or inside_distance <= self.SNAP_DISTANCE:
+                match = SnapMatch(
+                    owner_id,
+                    kind,
+                    target_id,
+                    inside_expected,
+                    inside_distance,
+                    inside=True,
+                )
+                # A containing cavity wins over nearby external connectors;
+                # the smallest cavity wins when loops are nested.
+                score = (
+                    0.0 if inside_cavity else 0.5,
+                    cavity.width() * cavity.height()
+                    if inside_cavity
+                    else inside_distance,
+                    inside_distance,
+                )
+                matches.append((score, match))
+        return min(matches, key=lambda candidate: candidate[0])[1] if matches else None
 
     def preview_snap_for_item(self, item: BlockGraphicsItem) -> None:
         match = self.find_snap_target_for_position(
@@ -300,9 +594,10 @@ class CanvasScene(QGraphicsScene):
             self.clear_snap_preview()
             return
         end = item.pos() + QPointF(self.CONNECTOR_X, 7)
-        self.show_snap_preview(match[0], end)
+        self.show_snap_preview(match, end)
 
-    def show_snap_preview(self, target_id: str, end: QPointF) -> None:
+    def show_snap_preview(self, match: SnapMatch, end: QPointF) -> None:
+        target_id = match.highlight_id
         if self._snap_target_id and self._snap_target_id != target_id:
             previous = self.block_items.get(self._snap_target_id)
             if previous:
@@ -312,9 +607,7 @@ class CanvasScene(QGraphicsScene):
         self._snap_target_id = target_id
         if self.snap_preview_item is not None:
             self.removeItem(self.snap_preview_item)
-        start = target.pos() + QPointF(
-            self.CONNECTOR_X, target.boundingRect().height() - 3
-        )
+        start = match.expected_position + QPointF(self.CONNECTOR_X, 7)
         path = QPainterPath(start)
         midpoint = (start.y() + end.y()) / 2
         path.cubicTo(
@@ -351,13 +644,21 @@ class CanvasScene(QGraphicsScene):
         )
         self.clear_snap_preview()
         if match:
-            self.connect_blocks(match[0], item.block.instance_id)
+            self.connect_blocks(
+                match.owner_id,
+                item.block.instance_id,
+                as_child=match.kind == "child",
+            )
             label = self.registry.block(item.block.type_id).display_label
-            self.interactionMessage.emit(f"Snapped {label} into the sequence.")
+            self.interactionMessage.emit(
+                f"Nested {label} inside the loop."
+                if match.inside
+                else f"Snapped {label} into the sequence."
+            )
             return True
         self.on_graph_changed()
         self.interactionMessage.emit(
-            "Block placed freely — drag it near a connector to snap."
+            "Block placed freely — drag it near a connector or into a loop."
         )
         return False
 
@@ -393,19 +694,22 @@ class CanvasScene(QGraphicsScene):
                     continue
                 source = self.block_items[block.instance_id]
                 target = self.block_items[target_id]
+                if is_child:
+                    # The C-shaped cavity itself communicates containment.
+                    continue
                 start = source.pos() + QPointF(
                     self.CONNECTOR_X,
                     source.boundingRect().height() - 3,
                 )
                 end = target.pos() + QPointF(self.CONNECTOR_X, 7)
-                if not is_child and QLineF(start, end).length() < 24:
+                if QLineF(start, end).length() < 24:
                     # Adjacent blocks are already joined by their visible tab
                     # and socket; a tiny bezier here reads as an oval artifact.
                     continue
                 path = QPainterPath(start)
                 vertical = max(8.0, abs(end.y() - start.y()) / 2)
                 path.cubicTo(
-                    start + QPointF(28 if is_child else 0, vertical),
+                    start + QPointF(0, vertical),
                     end - QPointF(0, vertical),
                     end,
                 )
@@ -432,6 +736,7 @@ class CanvasView(QGraphicsView):
         self._drag_active = False
         self._drag_position = QPoint()
         self._drag_will_snap = False
+        self._drag_target_inside = False
         self.setAcceptDrops(True)
         self.viewport().setAcceptDrops(True)
         self.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -483,9 +788,11 @@ class CanvasView(QGraphicsView):
             position = self._drop_scene_position(event)
             match = self.canvas_scene.find_snap_target_for_position(position)
             self._drag_will_snap = match is not None
+            self._drag_target_inside = bool(match and match.inside)
             if match:
                 self.canvas_scene.show_snap_preview(
-                    match[0], position + QPointF(self.canvas_scene.CONNECTOR_X, 7)
+                    match,
+                    position + QPointF(self.canvas_scene.CONNECTOR_X, 7),
                 )
             else:
                 self.canvas_scene.clear_snap_preview()
@@ -514,6 +821,7 @@ class CanvasView(QGraphicsView):
     def _finish_drag_feedback(self) -> None:
         self._drag_active = False
         self._drag_will_snap = False
+        self._drag_target_inside = False
         self.canvas_scene.clear_snap_preview()
         self.viewport().update()
 
@@ -595,7 +903,11 @@ class CanvasView(QGraphicsView):
             painter.drawText(
                 pill,
                 Qt.AlignmentFlag.AlignCenter,
-                "Release to snap" if self._drag_will_snap else "Release to add block",
+                "Release inside loop"
+                if self._drag_target_inside
+                else "Release to snap"
+                if self._drag_will_snap
+                else "Release to add block",
             )
         painter.end()
 

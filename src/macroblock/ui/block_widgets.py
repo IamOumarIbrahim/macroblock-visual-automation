@@ -33,6 +33,8 @@ class BlockEditorWidget(QFrame):
     """A colored block whose parameter values are edited directly in its face."""
 
     parameterChanged = Signal(str, object)
+    CONTAINER_FOOTER_HEIGHT = 42
+    EMPTY_CONTAINER_BODY_HEIGHT = 62
 
     def __init__(
         self,
@@ -46,6 +48,9 @@ class BlockEditorWidget(QFrame):
         self.editors: dict[str, QWidget] = {}
         self._visual_state = "normal"
         self._base_color = QColor(definition.color)
+        self._is_container = definition.is_container
+        self._container_has_children = False
+        self._container_body_height = self.EMPTY_CONTAINER_BODY_HEIGHT
         text_color = _text_color(definition.color)
         self.setObjectName("blockEditor")
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
@@ -96,6 +101,58 @@ class BlockEditorWidget(QFrame):
                 editor.editingFinished.connect(update)
             root.addLayout(row)
         self.adjustSize()
+        self._header_height = max(66, self.sizeHint().height())
+        self._natural_width = max(238, self.sizeHint().width())
+        if self._is_container:
+            root.addStretch(1)
+            self.set_container_layout(
+                self.EMPTY_CONTAINER_BODY_HEIGHT,
+                self._natural_width + 34,
+                has_children=False,
+            )
+
+    @property
+    def container_header_height(self) -> float:
+        return float(self._header_height)
+
+    @property
+    def container_child_y(self) -> float:
+        return float(self._header_height - 7)
+
+    @property
+    def container_footer_top(self) -> float:
+        return float(self._header_height + self._container_body_height - 7)
+
+    def container_body_rect(self) -> QRectF:
+        """Return the visible cavity used as an inside drop target."""
+
+        return QRectF(
+            30,
+            self.container_child_y,
+            max(1, self.width() - 42),
+            max(1, self._container_body_height),
+        )
+
+    def set_container_layout(
+        self, body_height: float, width: float, *, has_children: bool
+    ) -> None:
+        if not self._is_container:
+            return
+        self._container_body_height = max(
+            self.EMPTY_CONTAINER_BODY_HEIGHT if not has_children else 34,
+            int(round(body_height)),
+        )
+        self._container_has_children = has_children
+        target_width = max(self._natural_width + 34, int(round(width)))
+        target_height = (
+            self._header_height
+            + self._container_body_height
+            + self.CONTAINER_FOOTER_HEIGHT
+            - 7
+        )
+        self.setFixedSize(target_width, target_height)
+        self.updateGeometry()
+        self.update()
 
     def set_visual_state(self, state: str) -> None:
         if state != self._visual_state:
@@ -121,16 +178,75 @@ class BlockEditorWidget(QFrame):
             border = QColor(15, 23, 42, 105)
             border_width = 2
 
-        body = QRectF(2, 7, self.width() - 4, self.height() - 15)
-        shape = QPainterPath()
-        shape.addRoundedRect(body, 15, 15)
+        if self._is_container:
+            header = QPainterPath()
+            header.addRoundedRect(
+                QRectF(2, 7, self.width() - 4, self._header_height - 5),
+                15,
+                15,
+            )
+            spine = QPainterPath()
+            spine.addRect(
+                QRectF(
+                    2,
+                    self._header_height - 2,
+                    31,
+                    self._container_body_height + 7,
+                )
+            )
+            footer = QPainterPath()
+            footer.addRoundedRect(
+                QRectF(
+                    2,
+                    self.container_footer_top,
+                    self.width() - 4,
+                    self.CONTAINER_FOOTER_HEIGHT - 8,
+                ),
+                13,
+                13,
+            )
+            shape = header.united(spine).united(footer)
+        else:
+            body = QRectF(2, 7, self.width() - 4, self.height() - 15)
+            shape = QPainterPath()
+            shape.addRoundedRect(body, 15, 15)
+
         # The lower tab and transparent upper socket interlock when snapped,
         # giving the sequence a compact LEGO/Scratch-like silhouette.
-        tab = QRectF(27, self.height() - 13, 54, 12)
-        shape.addRoundedRect(tab, 6, 6)
+        tab_path = QPainterPath()
+        tab_path.addRoundedRect(QRectF(27, self.height() - 13, 54, 12), 6, 6)
+        shape = shape.united(tab_path)
         painter.setPen(QPen(border, border_width))
         painter.setBrush(color)
         painter.drawPath(shape)
+
+        if self._is_container:
+            if not self._container_has_children:
+                hint_rect = self.container_body_rect().adjusted(14, 12, -14, -12)
+                painter.setPen(QPen(QColor(100, 116, 139, 150), 2, Qt.PenStyle.DashLine))
+                painter.setBrush(QColor(255, 255, 255, 75))
+                painter.drawRoundedRect(hint_rect, 10, 10)
+                painter.setPen(QColor(71, 85, 105, 190))
+                painter.drawText(
+                    hint_rect,
+                    Qt.AlignmentFlag.AlignCenter,
+                    "Drop blocks inside",
+                )
+            loop_font = painter.font()
+            loop_font.setPointSize(18)
+            loop_font.setBold(True)
+            painter.setFont(loop_font)
+            painter.setPen(QColor(255, 255, 255, 225))
+            painter.drawText(
+                QRectF(
+                    self.width() - 47,
+                    self.container_footer_top + 1,
+                    31,
+                    29,
+                ),
+                Qt.AlignmentFlag.AlignCenter,
+                "\u21bb",
+            )
 
         socket = QRectF(27, 2, 54, 12)
         painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Clear)
