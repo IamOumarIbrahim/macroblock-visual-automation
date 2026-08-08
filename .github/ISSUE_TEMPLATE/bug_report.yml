@@ -1,0 +1,71 @@
+name: Bug report
+description: Report a reproducible Macroblock defect
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. For abort, input-safety, privacy, or code-execution issues, stop and use the private security form instead.
+  - type: dropdown
+    id: distribution
+    attributes:
+      label: How did you run Macroblock?
+      options:
+        - Packaged Macroblock.exe
+        - From source
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: "0.1.0 or a commit hash"
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: "Windows 11 24H2"
+    validations:
+      required: true
+  - type: textarea
+    id: displays
+    attributes:
+      label: Display setup
+      description: Include monitor count, resolution, arrangement, and scaling when relevant.
+      placeholder: "Two monitors: 2560x1440 at 125%, 1920x1080 at 100%"
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Provide the smallest repeatable sequence. Remove private text and coordinates.
+      placeholder: |
+        1. Add ...
+        2. Connect ...
+        3. Click ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and logs
+      description: Redact private automation data before pasting logs or screenshots.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed passwords, personal text, private coordinates, and unrelated `.mbk` content.
+          required: true
+        - label: This report does not describe a vulnerability or safety bypass.
+          required: true

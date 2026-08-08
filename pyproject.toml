@@ -9,6 +9,20 @@ description = "Visual block-based Windows desktop automation"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {file = "LICENSE"}
+authors = [{name = "Oumar Ibrahim"}]
+keywords = ["automation", "blocks", "desktop", "pyside6", "windows"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Win32 (MS Windows)",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: Microsoft :: Windows",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Desktop Environment",
+  "Topic :: Software Development :: User Interfaces",
+]
 dependencies = [
   "PySide6>=6.7,<7",
   "pywin32>=306; sys_platform == 'win32'",
@@ -23,10 +37,15 @@ dev = [
 [project.gui-scripts]
 macroblock = "macroblock.main:main"
 
+[project.urls]
+Homepage = "https://github.com/IamOumarIbrahim/macroblock"
+Documentation = "https://github.com/IamOumarIbrahim/macroblock#readme"
+Issues = "https://github.com/IamOumarIbrahim/macroblock/issues"
+Source = "https://github.com/IamOumarIbrahim/macroblock"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.pytest.ini_options]
 addopts = "-ra"
 testpaths = ["tests"]
-

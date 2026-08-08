@@ -3,7 +3,11 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $python = Join-Path $repoRoot ".venv\Scripts\python.exe"
 if (-not (Test-Path -LiteralPath $python)) {
-    throw "Virtual environment not found. Follow the README install steps first."
+    $pythonCommand = Get-Command python -ErrorAction SilentlyContinue
+    if (-not $pythonCommand) {
+        throw "Python not found. Create .venv as documented or place Python on PATH."
+    }
+    $python = $pythonCommand.Source
 }
 
 & $python (Join-Path $repoRoot "tools\generate_icon.py")

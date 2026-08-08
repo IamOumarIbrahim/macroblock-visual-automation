@@ -1,5 +1,9 @@
 # Macroblock
 
+[![CI](https://github.com/IamOumarIbrahim/macroblock/actions/workflows/ci.yml/badge.svg)](https://github.com/IamOumarIbrahim/macroblock/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB.svg)](https://www.python.org/)
+
 Macroblock is an open-source Windows desktop application for building local
 mouse and keyboard automations from color-coded, Scratch-style blocks. Drag a
 block from the categorized palette, edit values directly on the block, snap it
@@ -23,7 +27,7 @@ other automation data remain in the save files you choose on your computer.
 Requirements: Windows 10 or 11, Git, and 64-bit Python 3.11 or newer.
 
 ```powershell
-git clone <repository-url> macroblock
+git clone https://github.com/IamOumarIbrahim/macroblock.git
 cd macroblock
 py -3.11 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
@@ -89,3 +93,10 @@ the destination Windows machine.
 - `docs/ARCHITECTURE.md`: design decisions and future ideas
 
 Macroblock is available under the MIT License.
+
+## Contributing and support
+
+Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before
+opening a pull request, use [SUPPORT.md](SUPPORT.md) for help, and report
+security-sensitive issues according to [SECURITY.md](SECURITY.md). Everyone
+participating in the project must follow the [Code of Conduct](CODE_OF_CONDUCT.md).
