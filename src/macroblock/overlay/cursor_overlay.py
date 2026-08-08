@@ -24,6 +24,10 @@ SWP_NOSIZE = 0x0001
 SWP_NOMOVE = 0x0002
 SWP_NOACTIVATE = 0x0010
 SWP_SHOWWINDOW = 0x0040
+SM_XVIRTUALSCREEN = 76
+SM_YVIRTUALSCREEN = 77
+SM_CXVIRTUALSCREEN = 78
+SM_CYVIRTUALSCREEN = 79
 
 
 def global_cursor_position() -> tuple[int, int]:
@@ -56,6 +60,7 @@ class CursorOverlay(QWidget):
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._cursor_provider = cursor_provider
         self._global_cursor = QPoint()
+        self._physical_origin = QPoint()
         self.timer = QTimer(self)
         self.timer.setTimerType(Qt.TimerType.PreciseTimer)
         self.timer.setInterval(16)
@@ -76,7 +81,9 @@ class CursorOverlay(QWidget):
         return geometry
 
     def show_overlay(self) -> None:
-        self.setGeometry(self.virtual_desktop_geometry())
+        geometry = self.virtual_desktop_geometry()
+        self._physical_origin = geometry.topLeft()
+        self.setGeometry(geometry)
         self.poll_cursor()
         self.show()
         self._apply_win32_styles()
@@ -110,18 +117,36 @@ class CursorOverlay(QWidget):
         previous = set_style(hwnd, GWL_EXSTYLE, style)
         if previous == 0 and ctypes.get_last_error():
             raise ctypes.WinError(ctypes.get_last_error())
-        user32.SetWindowPos(
+        left, top, width, height = (
+            user32.GetSystemMetrics(metric)
+            for metric in (
+                SM_XVIRTUALSCREEN,
+                SM_YVIRTUALSCREEN,
+                SM_CXVIRTUALSCREEN,
+                SM_CYVIRTUALSCREEN,
+            )
+        )
+        self._physical_origin = QPoint(left, top)
+        if not user32.SetWindowPos(
             hwnd,
             wintypes.HWND(HWND_TOPMOST),
-            0,
-            0,
-            0,
-            0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW,
-        )
+            left,
+            top,
+            width,
+            height,
+            SWP_NOACTIVATE | SWP_SHOWWINDOW,
+        ):
+            raise ctypes.WinError(ctypes.get_last_error())
 
     def paintEvent(self, _event) -> None:
-        local = self._global_cursor - self.geometry().topLeft()
+        # GetCursorPos and the native virtual-screen rectangle are physical
+        # pixels. QPainter coordinates are device-independent, so divide by
+        # this window's DPR to keep the crosshair on the same physical pixel.
+        dpr = self.devicePixelRatioF() or 1.0
+        local = QPoint(
+            round((self._global_cursor.x() - self._physical_origin.x()) / dpr),
+            round((self._global_cursor.y() - self._physical_origin.y()) / dpr),
+        )
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setPen(QPen(QColor(239, 68, 68, 220), 2))

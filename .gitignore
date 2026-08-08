@@ -3,9 +3,9 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
+.pytest-*-temp/
 .coverage
 build/
 dist/
 *.spec
 *.mbk
-

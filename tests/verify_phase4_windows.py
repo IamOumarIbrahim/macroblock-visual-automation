@@ -61,6 +61,15 @@ def main() -> int:
     style = user32.GetWindowLongPtrW(wintypes.HWND(hwnd), GWL_STYLE)
     assert not style & WS_CAPTION, hex(style)
     assert user32.GetForegroundWindow() != hwnd
+    rect = wintypes.RECT()
+    assert user32.GetWindowRect(wintypes.HWND(hwnd), ctypes.byref(rect))
+    expected_rect = (
+        user32.GetSystemMetrics(76),
+        user32.GetSystemMetrics(77),
+        user32.GetSystemMetrics(76) + user32.GetSystemMetrics(78),
+        user32.GetSystemMetrics(77) + user32.GetSystemMetrics(79),
+    )
+    assert (rect.left, rect.top, rect.right, rect.bottom) == expected_rect
 
     samples = []
     provider = overlay._cursor_provider
