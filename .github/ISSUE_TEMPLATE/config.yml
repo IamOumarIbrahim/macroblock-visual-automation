@@ -1,8 +1,8 @@
 blank_issues_enabled: true
 contact_links:
   - name: Security or input-safety vulnerability
-    url: https://github.com/IamOumarIbrahim/macroblock/security/advisories/new
+    url: https://github.com/IamOumarIbrahim/macroblock-visual-automation/security/advisories/new
     about: Report vulnerabilities privately; do not open a public issue.
   - name: Support guide
-    url: https://github.com/IamOumarIbrahim/macroblock/blob/main/SUPPORT.md
+    url: https://github.com/IamOumarIbrahim/macroblock-visual-automation/blob/main/SUPPORT.md
     about: Read what diagnostic information to include before requesting help.

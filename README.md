@@ -122,7 +122,7 @@ Git, an administrator account, and 64-bit Python 3.11 or newer.
 
 ```powershell
 git clone https://github.com/IamOumarIbrahim/macroblock-visual-automation.git
-cd macroblock
+cd macroblock-visual-automation
 py -3.11 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
