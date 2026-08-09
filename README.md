@@ -5,15 +5,15 @@ programming required.
 
 ![Macroblock showing a complete visual automation with connected and nested blocks](Demo.png)
 
-[![CI](https://github.com/IamOumarIbrahim/macroblock/actions/workflows/ci.yml/badge.svg)](https://github.com/IamOumarIbrahim/macroblock/actions/workflows/ci.yml)
+[![CI](https://github.com/IamOumarIbrahim/macroblock-visual-automation/actions/workflows/ci.yml/badge.svg)](https://github.com/IamOumarIbrahim/macroblock-visual-automation/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Windows 10/11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4.svg)](https://www.microsoft.com/windows/)
 
 ## Download Macroblock
 
-[![Download the Macroblock Setup Wizard](https://img.shields.io/badge/Download-Setup%20Wizard-2563EB?style=for-the-badge&logo=windows)](https://github.com/IamOumarIbrahim/macroblock/releases/download/v0.1.0/Macroblock-Setup-0.1.0.exe)
+[![Download the Macroblock Setup Wizard](https://img.shields.io/badge/Download-Setup%20Wizard-2563EB?style=for-the-badge&logo=windows)](https://github.com/IamOumarIbrahim/macroblock-visual-automation/releases/download/v0.1.0/Macroblock-Setup-0.1.0.exe)
 
-**[Download Macroblock Setup Wizard 0.1.0 for Windows](https://github.com/IamOumarIbrahim/macroblock/releases/download/v0.1.0/Macroblock-Setup-0.1.0.exe)**
+**[Download Macroblock Setup Wizard 0.1.0 for Windows](https://github.com/IamOumarIbrahim/macroblock-visual-automation/releases/download/v0.1.0/Macroblock-Setup-0.1.0.exe)**
 
 The installer is for 64-bit Windows 10 and 11. It is approximately 46 MB.
 
@@ -39,7 +39,7 @@ Macroblock can:
 
 ## Install with the Setup Wizard
 
-1. [Download the Setup Wizard](https://github.com/IamOumarIbrahim/macroblock/releases/download/v0.1.0/Macroblock-Setup-0.1.0.exe),
+1. [Download the Setup Wizard](https://github.com/IamOumarIbrahim/macroblock-visual-automation/releases/download/v0.1.0/Macroblock-Setup-0.1.0.exe),
    then open `Macroblock-Setup-0.1.0.exe`.
 2. Approve the Windows administrator prompt.
 3. Follow the Setup Wizard and keep **Create a desktop icon** selected if you
@@ -121,7 +121,7 @@ This section is for developers and contributors. You need Windows 10 or 11,
 Git, an administrator account, and 64-bit Python 3.11 or newer.
 
 ```powershell
-git clone https://github.com/IamOumarIbrahim/macroblock.git
+git clone https://github.com/IamOumarIbrahim/macroblock-visual-automation.git
 cd macroblock
 py -3.11 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip

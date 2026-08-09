@@ -38,10 +38,10 @@ dev = [
 macroblock = "macroblock.main:main"
 
 [project.urls]
-Homepage = "https://github.com/IamOumarIbrahim/macroblock"
-Documentation = "https://github.com/IamOumarIbrahim/macroblock#readme"
-Issues = "https://github.com/IamOumarIbrahim/macroblock/issues"
-Source = "https://github.com/IamOumarIbrahim/macroblock"
+Homepage = "https://github.com/IamOumarIbrahim/macroblock-visual-automation"
+Documentation = "https://github.com/IamOumarIbrahim/macroblock-visual-automation#readme"
+Issues = "https://github.com/IamOumarIbrahim/macroblock-visual-automation/issues"
+Source = "https://github.com/IamOumarIbrahim/macroblock-visual-automation"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -3,7 +3,7 @@
   #define MyAppVersion "0.1.0"
 #endif
 #define MyAppPublisher "Oumar Ibrahim"
-#define MyAppURL "https://github.com/IamOumarIbrahim/macroblock"
+#define MyAppURL "https://github.com/IamOumarIbrahim/macroblock-visual-automation"
 #define MyAppExeName "Macroblock.exe"
 
 [Setup]

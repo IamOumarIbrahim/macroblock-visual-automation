@@ -22,7 +22,7 @@ Macroblock is a Windows application. Use Windows 10 or 11 and Python 3.11 or
 newer:
 
 ```powershell
-git clone https://github.com/IamOumarIbrahim/macroblock.git
+git clone https://github.com/IamOumarIbrahim/macroblock-visual-automation.git
 cd macroblock
 py -3.11 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip

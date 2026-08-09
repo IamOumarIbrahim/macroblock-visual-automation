@@ -4,7 +4,7 @@ Macroblock is community-supported alpha software.
 
 For setup and usage questions, first check the [README](README.md), especially
 the Windows requirements, safety abort, and contributor commands. Then search
-existing [GitHub issues](https://github.com/IamOumarIbrahim/macroblock/issues).
+existing [GitHub issues](https://github.com/IamOumarIbrahim/macroblock-visual-automation/issues).
 
 Open a bug report when behavior is reproducible. Include:
 

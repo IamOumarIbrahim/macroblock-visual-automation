@@ -13,7 +13,7 @@ and included in the next release. Older alpha builds are not maintained.
 Do not open a public issue for vulnerabilities. Use GitHub's private reporting
 form under **Security → Report a vulnerability**:
 
-https://github.com/IamOumarIbrahim/macroblock/security/advisories/new
+https://github.com/IamOumarIbrahim/macroblock-visual-automation/security/advisories/new
 
 Include the affected commit or version, Windows version, reproduction steps,
 impact, and any suggested mitigation. Remove passwords, personal text, private

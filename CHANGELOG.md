@@ -69,4 +69,4 @@ All notable changes to Macroblock will be documented here. The format follows
 - Red in-block keystroke recorders for Key Combo, Hold Key, and Release Key;
   successful recordings replace the existing value while cancel keeps it.
 
-[Unreleased]: https://github.com/IamOumarIbrahim/macroblock/commits/main
+[Unreleased]: https://github.com/IamOumarIbrahim/macroblock-visual-automation/commits/main
