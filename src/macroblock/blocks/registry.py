@@ -25,6 +25,7 @@ class ParameterType(str, Enum):
     KEY_LIST = "key_list"
     HOTKEY = "hotkey"
     VALUE = "value"
+    LONG_TEXT = "long_text"
 
 
 class FlowBehavior(str, Enum):
@@ -32,6 +33,7 @@ class FlowBehavior(str, Enum):
     ENTRY = "entry"
     REPEAT = "repeat"
     REPEAT_FOREVER = "repeat_forever"
+    CONDITION = "condition"
     STOP = "stop"
 
 
@@ -53,7 +55,11 @@ class ParameterDefinition:
                 and not isinstance(value, bool)
                 and math.isfinite(value)
             )
-        elif self.type in (ParameterType.TEXT, ParameterType.HOTKEY):
+        elif self.type in (
+            ParameterType.TEXT,
+            ParameterType.HOTKEY,
+            ParameterType.LONG_TEXT,
+        ):
             valid = isinstance(value, str)
         elif self.type is ParameterType.CHOICE:
             valid = isinstance(value, str) and value in self.choices

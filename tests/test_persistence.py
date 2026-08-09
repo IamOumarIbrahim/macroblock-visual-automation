@@ -79,3 +79,30 @@ def test_ui_load_failure_shows_dialog_instead_of_raising(tmp_path, monkeypatch) 
     assert "Invalid script JSON" in messages[0][1]
     window.close()
 
+
+def test_editable_system_blocks_round_trip_multiline_content(tmp_path) -> None:
+    registry = create_default_registry()
+    shell = BlockInstance.create(
+        registry,
+        "system.run_powershell",
+        instance_id="shell",
+        params={"script": "$name = 'Macroblock'\nWrite-Output $name"},
+    )
+    url = BlockInstance.create(
+        registry,
+        "system.open_url",
+        instance_id="url",
+        params={"url": "https://example.com/automation"},
+    )
+    shell.next_id = url.instance_id
+    graph = ScriptGraph.from_blocks("System CRUD", [shell, url])
+    path = tmp_path / "system-crud.mbk"
+
+    save_script(path, graph, registry)
+    restored = load_script(path, registry)
+
+    assert restored == graph
+    assert restored.blocks[0].params["script"].splitlines() == [
+        "$name = 'Macroblock'",
+        "Write-Output $name",
+    ]

@@ -36,6 +36,10 @@ behind a small interface.
   Drag-and-drop remains free-positioned, but both palette drops and existing
   block moves share one proximity-snap function. Drag hotspots are stored in
   MIME data so the block lands under the preview instead of under its corner.
+- Canvas blocks expose a dedicated QWidget drag surface. Pointer positions are
+  mapped back through the active graphics view and movement is applied to the
+  complete reachable stack; embedded line edits, combo boxes, multiline
+  editors, and spin buttons therefore retain native input behavior.
 - A snap destination identifies both an owner and a reference kind: `next`
   inserts into the surrounding sequence, while `child` enters an empty
   container. Filled cavities resolve to the tail of their child chain. The
@@ -45,6 +49,18 @@ behind a small interface.
   an occupied reference, moving a head translates all reachable descendants,
   and deletion splices the surrounding `next` chain while leaving container
   children as an independent root.
+- A flow-ordered numbering pass and right-edge link arrows make sequence order
+  explicit. Transient QPropertyAnimation scale pulses and drop-shadow state
+  provide combine/drag feedback without changing persisted geometry.
+- Duplication clones parameter values and only recreates `next`/`child` edges
+  whose endpoints are both selected, preventing accidental links back into the
+  source graph.
+- The view owns bounded zoom transforms, Space-activated hand panning, and
+  styled scrollbars. These are presentation-only and never affect saved scene
+  coordinates.
+- The packaged executable embeds a `requireAdministrator` manifest. Source
+  entry points check the process token and relaunch through `ShellExecuteW`
+  with the `runas` verb before constructing Qt or the Win32 input controller.
 
 ## Future
 

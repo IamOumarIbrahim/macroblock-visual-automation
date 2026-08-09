@@ -20,9 +20,29 @@ All notable changes to Macroblock will be documented here. The format follows
   orphaning their old chain, and deletion repairs surrounding connections.
 - Strengthened document validation for cycles, multiple parents, malformed
   block entries, non-finite values/positions, and shared mutable defaults.
+- Blocks now have an explicit drag grip, sequence number, animated drag glow,
+  combination pulse, audible connection cue, and high-contrast link arrow.
+- Added canvas zoom controls, Ctrl+wheel zoom, Space+left-drag panning, improved
+  scrollbars, gesture hints, and clearer live status messages.
+- Macroblock now requires elevation both from source and through the packaged
+  executable's UAC administrator manifest.
+
+### Fixed
+
+- Restored movement for blocks containing QWidget editors without stealing
+  clicks from text, choice, or numeric inputs.
+- Fixed A-Z, 0-9, function-key, arrow-key, and key-combination resolution in
+  the Win32 input layer.
+- Fixed unresponsive numeric up/down buttons embedded in canvas blocks.
 
 ### Added
 
+- Alt+click duplication, block context-menu duplication, multi-selection
+  duplication from the canvas, and palette double-click auto-add.
+- Relative mouse movement, mouse/key hold and release, randomized waits,
+  variable conditions/deletion, functional hotkey and file-wait events.
+- A System category with editable Open File/Folder, Open URL, Launch Program,
+  and multiline Run PowerShell Script blocks.
 - Data-driven Mouse, Keyboard, Timing, Control, Variables, and Events blocks.
 - Scratch-style drag palette, canvas positioning, snapping, inline parameter
   editing, disconnecting, and deletion.

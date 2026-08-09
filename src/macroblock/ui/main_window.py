@@ -36,6 +36,12 @@ class MainWindow(QMainWindow):
         self.toolbar = QToolBar("Main")
         self.toolbar.setMovable(False)
         self.toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        self.toolbar.setStyleSheet(
+            "QToolBar { spacing: 4px; padding: 3px; }"
+            "QToolButton { border-radius: 7px; padding: 6px 9px; }"
+            "QToolButton:hover { background: #334155; color: white; }"
+            "QToolButton:pressed { background: #1E293B; color: white; }"
+        )
         self.addToolBar(self.toolbar)
         self.selected_block_type = self.registry.blocks[0].id
         self.block_actions: dict[str, QAction] = {}
@@ -91,6 +97,16 @@ class MainWindow(QMainWindow):
         self.cursor_action = QAction("Show Cursor", self)
         self.cursor_action.setCheckable(True)
         self.toolbar.addAction(self.cursor_action)
+        self.toolbar.addSeparator()
+        self.zoom_out_action = QAction("Zoom −", self)
+        self.zoom_out_action.setToolTip("Zoom canvas out (Ctrl+mouse wheel also works)")
+        self.zoom_reset_action = QAction("100%", self)
+        self.zoom_reset_action.setToolTip("Reset canvas zoom")
+        self.zoom_in_action = QAction("Zoom +", self)
+        self.zoom_in_action.setToolTip("Zoom canvas in (Ctrl+mouse wheel also works)")
+        self.toolbar.addAction(self.zoom_out_action)
+        self.toolbar.addAction(self.zoom_reset_action)
+        self.toolbar.addAction(self.zoom_in_action)
         self.cursor_overlay: CursorOverlay | None = None
         self.current_file: Path | None = None
 
@@ -109,6 +125,7 @@ class MainWindow(QMainWindow):
         self.palette.blockSelected.connect(self.select_block_type)
         self.palette.blockDragStarted.connect(self._palette_drag_started)
         self.palette.blockDragFinished.connect(self._palette_drag_finished)
+        self.palette.blockDoubleClicked.connect(self._palette_double_clicked)
         self.execution = ExecutionController(self.registry, parent=self)
         self.execution.started.connect(self._execution_started)
         self.execution.finished.connect(self._execution_finished)
@@ -118,9 +135,12 @@ class MainWindow(QMainWindow):
         self.cursor_action.toggled.connect(self._toggle_cursor_overlay)
         self.load_action.triggered.connect(self.choose_load_script)
         self.save_action.triggered.connect(self.choose_save_script)
+        self.zoom_out_action.triggered.connect(self.canvas.zoom_out)
+        self.zoom_reset_action.triggered.connect(self.canvas.reset_zoom)
+        self.zoom_in_action.triggered.connect(self.canvas.zoom_in)
         self.select_block_type(self.palette.selected_type_id or self.selected_block_type)
         self.statusBar().showMessage(
-            "Choose a block and drag it in, or use ADD BLOCK for an automatic sequence."
+            "Drag or double-click a palette block · use a block's DRAG handle to move it · Space+drag pans."
         )
 
     @property
@@ -160,6 +180,14 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(
                 "Drag cancelled — use ADD BLOCK if you prefer automatic placement."
             )
+
+    def _palette_double_clicked(self, type_id: str) -> None:
+        self.select_block_type(type_id)
+        self.add_selected_block()
+        label = self.registry.block(type_id).display_label
+        self.statusBar().showMessage(
+            f"Double-click added {label} and connected it to the last canvas block."
+        )
 
     def run_script(self) -> None:
         if not self.graph.blocks:

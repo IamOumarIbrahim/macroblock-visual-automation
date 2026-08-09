@@ -1,6 +1,7 @@
 from PySide6.QtCore import QPoint, QPointF, Qt
-from PySide6.QtGui import QDragEnterEvent, QDragMoveEvent, QDropEvent
-from PySide6.QtWidgets import QApplication, QSpinBox
+from PySide6.QtGui import QDragEnterEvent, QDragMoveEvent, QDropEvent, QKeyEvent
+from PySide6.QtWidgets import QApplication, QPlainTextEdit, QSpinBox
+from PySide6.QtTest import QTest
 
 from macroblock.ui.main_window import MainWindow
 
@@ -315,4 +316,178 @@ def test_moving_a_connected_head_moves_its_entire_stack() -> None:
 
     assert child.pos() == starts[child.block.instance_id] + delta
     assert after.pos() == starts[after.block.instance_id] + delta
+    window.close()
+
+
+def test_drag_handle_moves_a_block_stack_without_stealing_editor_clicks() -> None:
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow()
+    window.show()
+    app.processEvents()
+    scene = window.canvas.canvas_scene
+    first = scene.add_block("mouse.click", QPointF(120, 120))
+    second = scene.add_block("timing.wait", QPointF(120, 300))
+    scene.connect_blocks(first.block.instance_id, second.block.instance_id)
+    app.processEvents()
+    starts = scene.connected_positions(first.block.instance_id)
+    handle = first.editor.drag_handle
+    global_start = handle.mapToGlobal(handle.rect().center())
+    delta = QPoint(86, 52)
+
+    first._begin_manual_drag(QPointF(global_start), Qt.KeyboardModifier.NoModifier)
+    first._move_manual_drag(
+        QPointF(global_start + delta), Qt.KeyboardModifier.NoModifier
+    )
+    first._finish_manual_drag(
+        QPointF(global_start + delta), Qt.KeyboardModifier.NoModifier
+    )
+
+    assert first.pos() == starts[first.block.instance_id] + QPointF(delta)
+    assert second.pos() == starts[second.block.instance_id] + QPointF(delta)
+    assert first._dragging is False
+    window.close()
+
+
+def test_spinbox_arrow_buttons_update_block_parameters() -> None:
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow()
+    window.show()
+    item = window.canvas.canvas_scene.add_block("control.repeat", QPointF(80, 80))
+    app.processEvents()
+    editor = item.editor.editors["count"]
+    assert isinstance(editor, QSpinBox)
+    before = editor.value()
+
+    QTest.mouseClick(
+        editor,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+        QPoint(editor.width() - 6, 5),
+    )
+    app.processEvents()
+
+    assert editor.value() == before + 1
+    assert item.block.params["count"] == before + 1
+    window.close()
+
+
+def test_blocks_are_numbered_and_connections_are_visibly_rendered() -> None:
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow()
+    scene = window.canvas.canvas_scene
+    first = scene.add_block("events.start", QPointF(50, 50))
+    second = scene.add_block("keyboard.type_text", QPointF(50, 180))
+    scene.connect_blocks(first.block.instance_id, second.block.instance_id)
+
+    assert first.editor._display_number == 1
+    assert second.editor._display_number == 2
+    assert len(scene.connection_items) == 2  # dark outline + bright arrow
+    window.close()
+
+
+def test_alt_duplicate_and_multi_selection_preserve_internal_links() -> None:
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow()
+    scene = window.canvas.canvas_scene
+    first = scene.add_block("mouse.click", QPointF(90, 90))
+    second = scene.add_block("timing.wait", QPointF(90, 220))
+    scene.connect_blocks(first.block.instance_id, second.block.instance_id)
+    first.setSelected(True)
+    second.setSelected(True)
+
+    duplicated = scene.duplicate_blocks(
+        [first.block.instance_id, second.block.instance_id]
+    )
+
+    assert len(duplicated) == 2
+    assert scene.graph.block_map()[duplicated[0]].next_id == duplicated[1]
+    assert scene.incoming_reference(duplicated[0]) is None
+
+    before = len(scene.graph.blocks)
+    first._begin_manual_drag(QPointF(), Qt.KeyboardModifier.AltModifier)
+    assert len(scene.graph.blocks) == before + 1
+    window.close()
+
+
+def test_canvas_zoom_and_space_pan_modes_are_responsive() -> None:
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow()
+    canvas = window.canvas
+    assert canvas.zoom_percent == 100
+
+    canvas.zoom_in()
+    assert canvas.zoom_percent > 100
+    canvas.zoom_out()
+    assert abs(canvas.zoom_percent - 100) <= 1
+    canvas.keyPressEvent(
+        QKeyEvent(
+            QKeyEvent.Type.KeyPress,
+            Qt.Key.Key_Space,
+            Qt.KeyboardModifier.NoModifier,
+        )
+    )
+    assert canvas._space_panning is True
+    assert canvas.dragMode() == canvas.DragMode.ScrollHandDrag
+    canvas.keyReleaseEvent(
+        QKeyEvent(
+            QKeyEvent.Type.KeyRelease,
+            Qt.Key.Key_Space,
+            Qt.KeyboardModifier.NoModifier,
+        )
+    )
+    assert canvas._space_panning is False
+    assert canvas.dragMode() == canvas.DragMode.RubberBandDrag
+    window.close()
+
+
+def test_palette_double_click_auto_adds_after_last_block() -> None:
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow()
+    window.show()
+    first = window.canvas.canvas_scene.add_block("mouse.click", QPointF(70, 70))
+    window.palette.show_category("keyboard")
+    app.processEvents()
+    palette_block = window.palette.block_widgets[0]
+
+    QTest.mouseDClick(palette_block, Qt.MouseButton.LeftButton)
+    app.processEvents()
+
+    added = window.graph.blocks[-1]
+    assert first.block.next_id == added.instance_id
+    assert added.type_id == palette_block.definition.id
+    window.close()
+
+
+def test_switching_palette_categories_removes_old_block_widgets_immediately() -> None:
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow()
+    old_widgets = list(window.palette.block_widgets)
+
+    window.palette.show_category("system")
+    app.processEvents()
+
+    assert all(widget.parent() is None for widget in old_widgets)
+    assert all(not widget.isVisible() for widget in old_widgets)
+    assert all(
+        widget.definition.category == "system"
+        for widget in window.palette.block_widgets
+    )
+    window.close()
+
+
+def test_shell_script_block_has_a_multiline_editable_field() -> None:
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow()
+    item = window.canvas.canvas_scene.add_block(
+        "system.run_powershell", QPointF(80, 80)
+    )
+    editor = item.editor.editors["script"]
+    assert isinstance(editor, QPlainTextEdit)
+
+    editor.setPlainText("$value = 42\nWrite-Output $value")
+    editor.editingFinished.emit()
+    app.processEvents()
+
+    assert item.block.params["script"] == "$value = 42\nWrite-Output $value"
+    assert editor.height() >= 80
     window.close()

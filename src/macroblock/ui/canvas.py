@@ -3,9 +3,20 @@
 from __future__ import annotations
 
 import math
+import os
+import winsound
 from dataclasses import dataclass
 
-from PySide6.QtCore import QLineF, QPoint, QPointF, QRectF, Qt, Signal
+from PySide6.QtCore import (
+    QEasingCurve,
+    QLineF,
+    QPoint,
+    QPointF,
+    QPropertyAnimation,
+    QRectF,
+    Qt,
+    Signal,
+)
 from PySide6.QtGui import QColor, QKeyEvent, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
     QGraphicsDropShadowEffect,
@@ -13,6 +24,7 @@ from PySide6.QtWidgets import (
     QGraphicsProxyWidget,
     QGraphicsScene,
     QGraphicsView,
+    QApplication,
     QMenu,
 )
 
@@ -35,23 +47,30 @@ class BlockGraphicsItem(QGraphicsProxyWidget):
         self._drag_start = QPointF()
         self._dragged_positions: dict[str, QPointF] = {}
         self._detached = False
+        self._manual_drag_active = False
+        self._manual_drag_moved = False
+        self._pointer_scene_start = QPointF()
         self._hovered = False
         self._snap_target = False
+        self._dragging = False
         editor = BlockEditorWidget(definition, block)
         editor.parameterChanged.connect(lambda *_args: scene.on_graph_changed())
+        editor.pointerPressed.connect(self._begin_manual_drag)
+        editor.pointerMoved.connect(self._move_manual_drag)
+        editor.pointerReleased.connect(self._finish_manual_drag)
         self.setWidget(editor)
-        self.setFlag(self.GraphicsItemFlag.ItemIsMovable, True)
+        self.setFlag(self.GraphicsItemFlag.ItemIsMovable, False)
         self.setFlag(self.GraphicsItemFlag.ItemIsSelectable, True)
         self.setFlag(self.GraphicsItemFlag.ItemSendsGeometryChanges, True)
         self.setAcceptHoverEvents(True)
         self.setCursor(Qt.CursorShape.OpenHandCursor)
         self.setCacheMode(self.CacheMode.DeviceCoordinateCache)
         self.setZValue(1)
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(17)
-        shadow.setOffset(0, 4)
-        shadow.setColor(QColor(15, 23, 42, 70))
-        self.setGraphicsEffect(shadow)
+        self._shadow = QGraphicsDropShadowEffect()
+        self._shadow.setBlurRadius(17)
+        self._shadow.setOffset(0, 4)
+        self._shadow.setColor(QColor(15, 23, 42, 70))
+        self.setGraphicsEffect(self._shadow)
 
     @property
     def editor(self) -> BlockEditorWidget:
@@ -64,6 +83,8 @@ class BlockGraphicsItem(QGraphicsProxyWidget):
     def _sync_visual_state(self) -> None:
         if self._snap_target:
             state = "snap"
+        elif self._dragging:
+            state = "drag"
         elif self.isSelected():
             state = "selected"
         elif self._hovered:
@@ -72,35 +93,89 @@ class BlockGraphicsItem(QGraphicsProxyWidget):
             state = "normal"
         self.editor.set_visual_state(state)
 
-    def mousePressEvent(self, event) -> None:
-        self._drag_start = self.pos()
+    def set_dragging(self, active: bool) -> None:
+        self._dragging = active
+        self._shadow.setBlurRadius(34 if active else 17)
+        self._shadow.setOffset(0, 0 if active else 4)
+        self._shadow.setColor(
+            QColor(56, 189, 248, 210) if active else QColor(15, 23, 42, 70)
+        )
+        self._sync_visual_state()
+
+    def _scene_position_from_global(self, position: QPointF) -> QPointF:
+        views = self.canvas_scene.views()
+        if not views:
+            return QPointF(position)
+        view = views[0]
+        viewport_position = view.viewport().mapFromGlobal(position.toPoint())
+        return view.mapToScene(viewport_position)
+
+    def _begin_manual_drag(self, global_position, modifiers) -> None:
+        if modifiers & Qt.KeyboardModifier.AltModifier:
+            duplicated = self.canvas_scene.duplicate_blocks([self.block.instance_id])
+            if duplicated:
+                self.canvas_scene.interactionMessage.emit(
+                    "Duplicated block — drag the copy or edit its values."
+                )
+            self._manual_drag_active = False
+            return
+        if not (modifiers & Qt.KeyboardModifier.ControlModifier):
+            self.canvas_scene.clearSelection()
+        self.setSelected(True)
+        self._manual_drag_active = True
+        self._manual_drag_moved = False
+        self._drag_start = QPointF(self.pos())
+        self._pointer_scene_start = self._scene_position_from_global(global_position)
         self._dragged_positions = self.canvas_scene.connected_positions(
             self.block.instance_id
         )
         self._detached = False
         self.setCursor(Qt.CursorShape.ClosedHandCursor)
-        self.setZValue(10)
+        self.setZValue(100)
+        self.set_dragging(True)
+        self.canvas_scene.interactionMessage.emit(
+            "Moving block stack — green shows where it will connect."
+        )
+
+    def _move_manual_drag(self, global_position, _modifiers) -> None:
+        if not self._manual_drag_active:
+            return
+        delta = self._scene_position_from_global(global_position) - self._pointer_scene_start
+        if delta.manhattanLength() < 3:
+            return
+        self._manual_drag_moved = True
+        if not self._detached:
+            self.canvas_scene.disconnect_incoming(self.block.instance_id)
+            self._detached = True
+        self.setPos(self._drag_start + delta)
+        self.canvas_scene.move_connected_items(
+            self.block.instance_id,
+            self._dragged_positions,
+            delta,
+        )
+        self.canvas_scene.preview_snap_for_item(self)
+
+    def _finish_manual_drag(self, _global_position, _modifiers) -> None:
+        if not self._manual_drag_active:
+            return
+        self._manual_drag_active = False
+        self.setCursor(Qt.CursorShape.OpenHandCursor)
+        self.set_dragging(False)
+        if self._manual_drag_moved:
+            self.canvas_scene.snap_item(self)
+        else:
+            self.canvas_scene.clear_snap_preview()
+        self._dragged_positions.clear()
+        self.setZValue(1)
+
+    def mousePressEvent(self, event) -> None:
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event) -> None:
         super().mouseMoveEvent(event)
-        if (self.pos() - self._drag_start).manhattanLength() > 6:
-            if not self._detached:
-                self.canvas_scene.disconnect_incoming(self.block.instance_id)
-                self._detached = True
-            self.canvas_scene.move_connected_items(
-                self.block.instance_id,
-                self._dragged_positions,
-                self.pos() - self._drag_start,
-            )
-            self.canvas_scene.preview_snap_for_item(self)
 
     def mouseReleaseEvent(self, event) -> None:
         super().mouseReleaseEvent(event)
-        self.setCursor(Qt.CursorShape.OpenHandCursor)
-        self.setZValue(1)
-        self.canvas_scene.snap_item(self)
-        self._dragged_positions.clear()
 
     def hoverEnterEvent(self, event) -> None:
         self._hovered = True
@@ -125,10 +200,28 @@ class BlockGraphicsItem(QGraphicsProxyWidget):
 
     def contextMenuEvent(self, event) -> None:
         menu = QMenu()
+        selected_ids = [
+            item.block.instance_id
+            for item in self.canvas_scene.selectedItems()
+            if isinstance(item, BlockGraphicsItem)
+        ]
+        duplicate_ids = (
+            selected_ids
+            if self.isSelected() and len(selected_ids) > 1
+            else [self.block.instance_id]
+        )
+        duplicate = menu.addAction(
+            f"Duplicate {len(duplicate_ids)} selected blocks"
+            if len(duplicate_ids) > 1
+            else "Duplicate block"
+        )
+        menu.addSeparator()
         disconnect = menu.addAction("Disconnect from above")
         delete = menu.addAction("Delete block")
         selected = menu.exec(event.screenPos())
-        if selected is disconnect:
+        if selected is duplicate:
+            self.canvas_scene.duplicate_blocks(duplicate_ids)
+        elif selected is disconnect:
             self.canvas_scene.disconnect_incoming(self.block.instance_id)
         elif selected is delete:
             self.canvas_scene.delete_block(self.block.instance_id)
@@ -167,6 +260,7 @@ class CanvasScene(QGraphicsScene):
         self._snap_target_id: str | None = None
         self.last_added_id: str | None = None
         self._layout_in_progress = False
+        self._active_animations: list[QPropertyAnimation] = []
         self.setSceneRect(-2000, -2000, 6000, 6000)
 
     def add_block(
@@ -264,6 +358,8 @@ class CanvasScene(QGraphicsScene):
 
         self.relayout_component(previous_id)
         self.on_graph_changed()
+        self.animate_combination(previous_id, next_id)
+        self.play_connect_sound()
 
     def _would_cycle(self, previous_id: str, next_id: str) -> bool:
         blocks = self.graph.block_map()
@@ -321,6 +417,84 @@ class CanvasScene(QGraphicsScene):
             for block_id in self.connected_ids(start_id)
             if block_id in self.block_items
         }
+
+    def duplicate_blocks(self, block_ids: list[str]) -> list[str]:
+        """Duplicate selected blocks while preserving links within the selection."""
+
+        selected = set(block_ids)
+        originals = [
+            block for block in self.graph.blocks if block.instance_id in selected
+        ]
+        if not originals:
+            return []
+        mapping: dict[str, BlockInstance] = {}
+        for original in originals:
+            clone = BlockInstance.create(
+                self.registry,
+                original.type_id,
+                params=original.params,
+                x=original.x + 38,
+                y=original.y + 38,
+            )
+            mapping[original.instance_id] = clone
+        for original in originals:
+            clone = mapping[original.instance_id]
+            if original.next_id in mapping:
+                clone.next_id = mapping[original.next_id].instance_id
+            if original.child_id in mapping:
+                clone.child_id = mapping[original.child_id].instance_id
+            self.graph.add(clone)
+            self._add_existing_block(clone)
+
+        self.clearSelection()
+        duplicated_ids = [mapping[block.instance_id].instance_id for block in originals]
+        self.last_added_id = duplicated_ids[-1]
+        self.relayout_all()
+        for block_id in duplicated_ids:
+            self.block_items[block_id].setSelected(True)
+            self.animate_item(block_id)
+        self.on_graph_changed()
+        self.interactionMessage.emit(
+            f"Duplicated {len(duplicated_ids)} block"
+            f"{'s' if len(duplicated_ids) != 1 else ''}; internal links were preserved."
+        )
+        return duplicated_ids
+
+    def animate_item(self, block_id: str) -> None:
+        item = self.block_items.get(block_id)
+        if item is None or QApplication.platformName() == "offscreen":
+            return
+        item.setTransformOriginPoint(item.boundingRect().center())
+        animation = QPropertyAnimation(item, b"scale", self)
+        animation.setDuration(260)
+        animation.setStartValue(0.96)
+        animation.setKeyValueAt(0.45, 1.045)
+        animation.setEndValue(1.0)
+        animation.setEasingCurve(QEasingCurve.Type.OutBack)
+        self._active_animations.append(animation)
+
+        def cleanup() -> None:
+            if animation in self._active_animations:
+                self._active_animations.remove(animation)
+
+        animation.finished.connect(cleanup)
+        animation.start()
+
+    def animate_combination(self, previous_id: str, next_id: str) -> None:
+        self.animate_item(previous_id)
+        self.animate_item(next_id)
+
+    @staticmethod
+    def play_connect_sound() -> None:
+        if os.name != "nt" or QApplication.platformName() == "offscreen":
+            return
+        try:
+            winsound.PlaySound(
+                "SystemAsterisk",
+                winsound.SND_ALIAS | winsound.SND_ASYNC | winsound.SND_NODEFAULT,
+            )
+        except RuntimeError:
+            QApplication.beep()
 
     def move_connected_items(
         self,
@@ -663,9 +837,39 @@ class CanvasScene(QGraphicsScene):
         return False
 
     def on_graph_changed(self) -> None:
+        self.renumber_blocks()
         self.refresh_connections()
         self.warningChanged.emit(self.hotkey_warning())
         self.graphChanged.emit()
+
+    def renumber_blocks(self) -> None:
+        referenced = {
+            reference
+            for block in self.graph.blocks
+            for reference in (block.next_id, block.child_id)
+            if reference
+        }
+        blocks = self.graph.block_map()
+        ordered: list[str] = []
+        seen: set[str] = set()
+
+        def visit_chain(block_id: str | None) -> None:
+            current_id = block_id
+            while current_id and current_id not in seen:
+                seen.add(current_id)
+                ordered.append(current_id)
+                block = blocks[current_id]
+                visit_chain(block.child_id)
+                current_id = block.next_id
+
+        for block in self.graph.blocks:
+            if block.instance_id not in referenced:
+                visit_chain(block.instance_id)
+        for block in self.graph.blocks:
+            visit_chain(block.instance_id)
+        for number, block_id in enumerate(ordered, start=1):
+            if block_id in self.block_items:
+                self.block_items[block_id].editor.set_display_number(number)
 
     def hotkey_warning(self) -> str:
         used: dict[str, int] = {}
@@ -698,33 +902,75 @@ class CanvasScene(QGraphicsScene):
                     # The C-shaped cavity itself communicates containment.
                     continue
                 start = source.pos() + QPointF(
-                    self.CONNECTOR_X,
-                    source.boundingRect().height() - 3,
+                    source.boundingRect().width() - 22,
+                    source.boundingRect().height() - 22,
                 )
-                end = target.pos() + QPointF(self.CONNECTOR_X, 7)
-                if QLineF(start, end).length() < 24:
-                    # Adjacent blocks are already joined by their visible tab
-                    # and socket; a tiny bezier here reads as an oval artifact.
-                    continue
+                end = target.pos() + QPointF(
+                    target.boundingRect().width() - 22,
+                    20,
+                )
                 path = QPainterPath(start)
-                vertical = max(8.0, abs(end.y() - start.y()) / 2)
+                control_x = max(start.x(), end.x()) + 26
                 path.cubicTo(
-                    start + QPointF(0, vertical),
-                    end - QPointF(0, vertical),
+                    QPointF(control_x, start.y()),
+                    QPointF(control_x, end.y()),
                     end,
                 )
+                path.moveTo(end)
+                path.lineTo(end + QPointF(7, -7))
+                path.moveTo(end)
+                path.lineTo(end + QPointF(7, 7))
+                outline = QGraphicsPathItem(path)
+                outline.setPen(
+                    QPen(
+                        QColor(15, 23, 42, 145),
+                        8,
+                        Qt.PenStyle.SolidLine,
+                        Qt.PenCapStyle.RoundCap,
+                        Qt.PenJoinStyle.RoundJoin,
+                    )
+                )
+                outline.setZValue(0.15)
+                self.addItem(outline)
+                self.connection_items.append(outline)
                 line = QGraphicsPathItem(path)
                 line.setPen(
                     QPen(
-                        QColor("#64748B"),
-                        4,
+                        QColor("#38BDF8"),
+                        4.5,
                         Qt.PenStyle.SolidLine,
                         Qt.PenCapStyle.RoundCap,
+                        Qt.PenJoinStyle.RoundJoin,
                     )
                 )
-                line.setZValue(-1)
+                line.setZValue(0.2)
                 self.addItem(line)
                 self.connection_items.append(line)
+
+    def contextMenuEvent(self, event) -> None:
+        if any(
+            isinstance(item, BlockGraphicsItem)
+            for item in self.items(event.scenePos())
+        ):
+            return super().contextMenuEvent(event)
+        selected_ids = [
+            block.instance_id
+            for block in self.graph.blocks
+            if self.block_items[block.instance_id].isSelected()
+        ]
+        if not selected_ids:
+            return super().contextMenuEvent(event)
+        menu = QMenu()
+        duplicate = menu.addAction(f"Duplicate {len(selected_ids)} selected blocks")
+        delete = menu.addAction(f"Delete {len(selected_ids)} selected blocks")
+        chosen = menu.exec(event.screenPos())
+        if chosen is duplicate:
+            self.duplicate_blocks(selected_ids)
+        elif chosen is delete:
+            for block_id in reversed(selected_ids):
+                if block_id in self.block_items:
+                    self.delete_block(block_id)
+        event.accept()
 
 
 class CanvasView(QGraphicsView):
@@ -737,13 +983,30 @@ class CanvasView(QGraphicsView):
         self._drag_position = QPoint()
         self._drag_will_snap = False
         self._drag_target_inside = False
+        self._space_panning = False
+        self._minimum_zoom = 0.35
+        self._maximum_zoom = 2.5
         self.setAcceptDrops(True)
         self.viewport().setAcceptDrops(True)
         self.setRenderHint(QPainter.RenderHint.Antialiasing)
         self.setDragMode(self.DragMode.RubberBandDrag)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setTransformationAnchor(self.ViewportAnchor.AnchorUnderMouse)
+        self.setResizeAnchor(self.ViewportAnchor.AnchorViewCenter)
         self.setViewportUpdateMode(self.ViewportUpdateMode.BoundingRectViewportUpdate)
         self.setBackgroundBrush(QColor("#F8FAFC"))
-        self.setStyleSheet("border: 0; background: #F8FAFC;")
+        self.setStyleSheet(
+            "QGraphicsView { border: 0; background: #F8FAFC; }"
+            "QScrollBar:vertical { background: #EEF2F7; width: 13px; margin: 2px;"
+            " border-radius: 6px; }"
+            "QScrollBar:horizontal { background: #EEF2F7; height: 13px; margin: 2px;"
+            " border-radius: 6px; }"
+            "QScrollBar::handle { background: #94A3B8; border-radius: 5px; min-width: 34px;"
+            " min-height: 34px; }"
+            "QScrollBar::handle:hover { background: #64748B; }"
+            "QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; }"
+            "QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }"
+        )
         self.canvas_scene.interactionMessage.connect(self.interactionMessage)
 
     @staticmethod
@@ -837,6 +1100,44 @@ class CanvasView(QGraphicsView):
         )
         return item, connected
 
+    @property
+    def zoom_percent(self) -> int:
+        return round(self.transform().m11() * 100)
+
+    def zoom_by(self, factor: float) -> None:
+        current = self.transform().m11()
+        target = max(self._minimum_zoom, min(self._maximum_zoom, current * factor))
+        if math.isclose(current, target, rel_tol=1e-6):
+            return
+        self.scale(target / current, target / current)
+        self.interactionMessage.emit(
+            f"Canvas zoom: {self.zoom_percent}% — Ctrl+wheel or toolbar buttons adjust it."
+        )
+        self.viewport().update()
+
+    def zoom_in(self) -> None:
+        self.zoom_by(1.15)
+
+    def zoom_out(self) -> None:
+        self.zoom_by(1 / 1.15)
+
+    def reset_zoom(self) -> None:
+        self.resetTransform()
+        self.interactionMessage.emit("Canvas zoom reset to 100%.")
+        self.viewport().update()
+
+    def wheelEvent(self, event) -> None:
+        if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            self.zoom_by(1.15 if event.angleDelta().y() > 0 else 1 / 1.15)
+            event.accept()
+            return
+        super().wheelEvent(event)
+
+    def mousePressEvent(self, event) -> None:
+        if self.itemAt(event.position().toPoint()) is None:
+            self.setFocus(Qt.FocusReason.MouseFocusReason)
+        super().mousePressEvent(event)
+
     def drawBackground(self, painter: QPainter, rect: QRectF) -> None:
         painter.fillRect(rect, QColor("#F8FAFC"))
         spacing = 24
@@ -909,9 +1210,41 @@ class CanvasView(QGraphicsView):
                 if self._drag_will_snap
                 else "Release to add block",
             )
+        hint = QRectF(16, self.viewport().height() - 43, 455, 29)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(15, 23, 42, 205))
+        painter.drawRoundedRect(hint, 9, 9)
+        painter.setPen(QColor("white"))
+        painter.drawText(
+            hint,
+            Qt.AlignmentFlag.AlignCenter,
+            "⠿ Drag handle: move · Space+drag: pan · Ctrl+wheel: zoom · Alt+click: duplicate",
+        )
+        zoom_badge = QRectF(
+            self.viewport().width() - 92,
+            self.viewport().height() - 43,
+            76,
+            29,
+        )
+        painter.setPen(QPen(QColor("#CBD5E1"), 1))
+        painter.setBrush(QColor(255, 255, 255, 235))
+        painter.drawRoundedRect(zoom_badge, 9, 9)
+        painter.setPen(QColor("#334155"))
+        painter.drawText(
+            zoom_badge,
+            Qt.AlignmentFlag.AlignCenter,
+            f"{self.zoom_percent}%",
+        )
         painter.end()
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
+        if event.key() == Qt.Key.Key_Space and not event.isAutoRepeat():
+            self._space_panning = True
+            self.setDragMode(self.DragMode.ScrollHandDrag)
+            self.setCursor(Qt.CursorShape.OpenHandCursor)
+            self.interactionMessage.emit("Pan mode — hold left mouse and drag the canvas.")
+            event.accept()
+            return
         if event.key() == Qt.Key.Key_Delete:
             selected = [
                 item.block.instance_id
@@ -923,3 +1256,13 @@ class CanvasView(QGraphicsView):
             if selected:
                 return
         super().keyPressEvent(event)
+
+    def keyReleaseEvent(self, event: QKeyEvent) -> None:
+        if event.key() == Qt.Key.Key_Space and not event.isAutoRepeat():
+            self._space_panning = False
+            self.setDragMode(self.DragMode.RubberBandDrag)
+            self.unsetCursor()
+            self.interactionMessage.emit("Pan mode off — drag-select is active again.")
+            event.accept()
+            return
+        super().keyReleaseEvent(event)

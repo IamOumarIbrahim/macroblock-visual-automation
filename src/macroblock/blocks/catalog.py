@@ -19,6 +19,7 @@ CATEGORIES = (
     CategoryDefinition("control", "Control", "#F97316"),
     CategoryDefinition("variables", "Variables", "#EF4444"),
     CategoryDefinition("events", "Events", "#22C55E"),
+    CategoryDefinition("system", "System", "#0F766E"),
 )
 
 
@@ -56,6 +57,24 @@ BLOCKS = (
         (Param("amount", "Amount", Type.INTEGER, -3),),
     ),
     BlockDefinition(
+        "mouse.move_by",
+        "mouse",
+        "Move Cursor By",
+        (Param("dx", "X change", Type.INTEGER, 50), Param("dy", "Y change", Type.INTEGER, 0)),
+    ),
+    BlockDefinition(
+        "mouse.button_down",
+        "mouse",
+        "Hold Mouse Button",
+        (Param("button", "Button", Type.CHOICE, "left", ("left", "right", "middle")),),
+    ),
+    BlockDefinition(
+        "mouse.button_up",
+        "mouse",
+        "Release Mouse Button",
+        (Param("button", "Button", Type.CHOICE, "left", ("left", "right", "middle")),),
+    ),
+    BlockDefinition(
         "keyboard.press",
         "keyboard",
         "Press Key",
@@ -74,10 +93,31 @@ BLOCKS = (
         (Param("keys", "Keys", Type.KEY_LIST, ["CTRL", "C"]),),
     ),
     BlockDefinition(
+        "keyboard.key_down",
+        "keyboard",
+        "Hold Key",
+        (Param("key", "Key", Type.TEXT, "SHIFT"),),
+    ),
+    BlockDefinition(
+        "keyboard.key_up",
+        "keyboard",
+        "Release Key",
+        (Param("key", "Key", Type.TEXT, "SHIFT"),),
+    ),
+    BlockDefinition(
         "timing.wait",
         "timing",
         "Wait",
         (Param("seconds", "Seconds", Type.NUMBER, 1.0, minimum=0),),
+    ),
+    BlockDefinition(
+        "timing.random_wait",
+        "timing",
+        "Wait Random Duration",
+        (
+            Param("minimum", "Min seconds", Type.NUMBER, 0.5, minimum=0),
+            Param("maximum", "Max seconds", Type.NUMBER, 2.0, minimum=0),
+        ),
     ),
     BlockDefinition(
         "control.repeat",
@@ -98,6 +138,17 @@ BLOCKS = (
         "control.stop", "control", "Stop Script", is_terminal=True, flow=Flow.STOP
     ),
     BlockDefinition(
+        "control.if_variable_equals",
+        "control",
+        "If Variable Equals",
+        (
+            Param("name", "Variable", Type.TEXT, "score"),
+            Param("value", "Equals", Type.VALUE, 1),
+        ),
+        is_container=True,
+        flow=Flow.CONDITION,
+    ),
+    BlockDefinition(
         "variables.set",
         "variables",
         "Set Variable",
@@ -110,12 +161,74 @@ BLOCKS = (
         (Param("name", "Name", Type.TEXT, "score"), Param("by", "By", Type.NUMBER, 1)),
     ),
     BlockDefinition(
+        "variables.delete",
+        "variables",
+        "Delete Variable",
+        (Param("name", "Name", Type.TEXT, "score"),),
+    ),
+    BlockDefinition(
+        "events.start",
+        "events",
+        "When Script Starts",
+        is_entry_point=True,
+        flow=Flow.ENTRY,
+    ),
+    BlockDefinition(
         "events.hotkey",
         "events",
         "When Hotkey Pressed",
         (Param("hotkey", "Hotkey", Type.HOTKEY, "Ctrl+Alt+M"),),
         is_entry_point=True,
         flow=Flow.ENTRY,
+    ),
+    BlockDefinition(
+        "events.wait_hotkey",
+        "events",
+        "Wait For Hotkey",
+        (Param("hotkey", "Hotkey", Type.HOTKEY, "Ctrl+Shift+M"),),
+    ),
+    BlockDefinition(
+        "events.wait_file",
+        "events",
+        "Wait Until File Exists",
+        (
+            Param("path", "File path", Type.TEXT, r"C:\Temp\ready.txt"),
+            Param("poll_seconds", "Check every", Type.NUMBER, 0.25, minimum=0.05),
+        ),
+    ),
+    BlockDefinition(
+        "system.open_file",
+        "system",
+        "Open File or Folder",
+        (Param("path", "Path", Type.TEXT, "C:\\"),),
+    ),
+    BlockDefinition(
+        "system.open_url",
+        "system",
+        "Open URL",
+        (Param("url", "URL", Type.TEXT, "https://example.com"),),
+    ),
+    BlockDefinition(
+        "system.run_powershell",
+        "system",
+        "Run PowerShell Script",
+        (
+            Param(
+                "script",
+                "Script",
+                Type.LONG_TEXT,
+                'Write-Output "Hello from Macroblock"',
+            ),
+        ),
+    ),
+    BlockDefinition(
+        "system.launch_program",
+        "system",
+        "Launch Program",
+        (
+            Param("path", "Program", Type.TEXT, "notepad.exe"),
+            Param("arguments", "Arguments", Type.TEXT, ""),
+        ),
     ),
 )
 

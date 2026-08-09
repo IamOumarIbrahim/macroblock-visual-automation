@@ -18,6 +18,7 @@ if ($LASTEXITCODE -ne 0) { throw "Icon generation failed." }
     --clean `
     --onefile `
     --windowed `
+    --uac-admin `
     --name Macroblock `
     --icon (Join-Path $repoRoot "assets\icons\macroblock.ico") `
     --add-data "$(Join-Path $repoRoot 'assets\icons\macroblock.ico');assets\icons" `

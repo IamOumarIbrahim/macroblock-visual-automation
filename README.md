@@ -16,6 +16,12 @@ into a sequence, and run the result without writing code.
 - Waits, counted and until-stopped loops, variables, and event entry blocks
 - Expandable C-shaped loops that visibly encapsulate complete block stacks,
   including other nested loops
+- Numbered blocks, high-contrast connection arrows, snap previews, drag glow,
+  combination pulse/click feedback, zooming, and space-drag panning
+- Duplicate one block with Alt+click, or duplicate a multi-selection while
+  preserving its internal links
+- System automation for files, folders, URLs, programs, and multiline
+  PowerShell scripts
 - A global safety abort: hold **Esc for 0.5 seconds** while a script is running
 - A topmost, click-through crosshair with live physical-pixel coordinates
 - Versioned, local-only `.mbk` save files
@@ -26,7 +32,9 @@ other automation data remain in the save files you choose on your computer.
 
 ## Install and run from source
 
-Requirements: Windows 10 or 11, Git, and 64-bit Python 3.11 or newer.
+Requirements: Windows 10 or 11, Git, 64-bit Python 3.11 or newer, and an
+administrator account. Macroblock always requests elevation at startup because
+input injection and system automation must run at a consistent integrity level.
 
 ```powershell
 git clone https://github.com/IamOumarIbrahim/macroblock.git
@@ -44,22 +52,45 @@ policy changes. Contributors who prefer activation can instead run
 ## Use
 
 1. Choose a category at left and drag blocks onto the canvas, or use the
-   always-visible **ADD BLOCK** menu.
+   always-visible **ADD BLOCK** menu. Double-clicking a palette block also adds
+   it after the last canvas block.
 2. **ADD BLOCK** appends to the last block automatically. Dragged blocks show a
    green snap preview when they are close enough to interlock.
 3. Drag a block into a loop's open cavity to nest it. The loop expands around
    its child stack; drop at its lower connector to place the block after it.
 4. Moving a connected block moves its entire child/next stack. Dropping on an
    occupied connector inserts the stack without discarding existing blocks.
-5. Edit numbers, text, choices, and key lists directly on each block.
-6. Select a block and press Delete, or right-click it to disconnect/delete.
-7. Choose **Run Script**. Hold **Esc for 0.5 seconds** at any time to abort.
-8. Use **Show Cursor** to read screen coordinates without blocking clicks.
-9. Save and load local scripts with the `.mbk` format.
+5. Use the visible **DRAG** grip to reposition a block stack. Hold Space and
+   left-drag the canvas to pan; use Ctrl+wheel or the toolbar to zoom.
+6. Alt+click a block to duplicate it. For several blocks, select them and
+   right-click empty canvas space to duplicate the selection and its links.
+7. Edit numbers, text, choices, key lists, paths, URLs, and multiline scripts
+   directly on each block. The arrow buttons on numeric fields increment and
+   decrement their value.
+8. Select a block and press Delete, or right-click it for duplicate,
+   disconnect, and delete operations.
+9. Choose **Run Script**. A **When Hotkey Pressed** entry waits for its hotkey;
+   hold **Esc for 0.5 seconds** at any time to abort.
+10. Use **Show Cursor** to read screen coordinates without blocking clicks.
+11. Save and load local scripts with the `.mbk` format.
+
+## Built-in automation blocks
+
+- **Mouse:** absolute/relative movement, click, drag, scroll, and button hold/release
+- **Keyboard:** key press, text entry, key combinations, and key hold/release
+- **Timing:** fixed and randomized interruptible waits
+- **Control:** counted/forever loops, variable conditions, and stop
+- **Variables:** set, change, and delete
+- **Events:** script start, hotkey entry/wait, and wait until a file exists
+- **System:** open a file/folder, open a URL, launch a program, and run a
+  multiline PowerShell script
 
 Coordinates outside every connected monitor are skipped and logged instead of
 being sent. Macroblock also refuses to start execution if its global abort
 monitor cannot be activated.
+
+System and PowerShell blocks intentionally run with Macroblock's elevated
+permissions. Only open `.mbk` files and run scripts you trust.
 
 ## Test
 
@@ -89,7 +120,8 @@ After installing the development dependencies:
 The reproducible build script regenerates the icon and writes
 `dist\Macroblock.exe`. PyInstaller bundles Python and all runtime dependencies;
 the resulting executable does not require Python or a virtual environment on
-the destination Windows machine.
+the destination Windows machine. Its embedded manifest requires administrator
+elevation, so Windows displays a UAC prompt before the application opens.
 
 ## Project structure
 

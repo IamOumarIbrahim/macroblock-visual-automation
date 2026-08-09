@@ -22,6 +22,12 @@ class InputProtocol(Protocol):
     def press_key(self, key: str) -> None: ...
     def type_text(self, text: str) -> None: ...
     def key_combo(self, keys: list[str]) -> None: ...
+    def move_by(self, dx: int, dy: int) -> bool: ...
+    def button_down(self, button: str) -> None: ...
+    def button_up(self, button: str) -> None: ...
+    def key_down(self, key: str) -> None: ...
+    def key_up(self, key: str) -> None: ...
+    def hotkey_is_down(self, hotkey: str) -> bool: ...
 
 
 class ExecutionError(RuntimeError):
@@ -124,8 +130,13 @@ class ScriptExecutor:
                         context.abort_event.wait(0.01)
                     else:
                         self._execute_chain(block.child_id, blocks, context, chain_seen)
+            elif definition.flow is FlowBehavior.CONDITION:
+                if context.variables.get(block.params["name"]) == block.params["value"]:
+                    self._execute_chain(block.child_id, blocks, context, chain_seen)
             elif definition.flow is FlowBehavior.ENTRY:
-                pass
+                handler = self.handlers.handler(block.type_id)
+                if handler is not None:
+                    handler(block, context)
             else:
                 handler = self.handlers.handler(block.type_id)
                 if handler is None:
@@ -134,4 +145,3 @@ class ScriptExecutor:
                     )
                 handler(block, context)
             current_id = block.next_id
-

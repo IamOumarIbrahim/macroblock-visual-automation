@@ -2,8 +2,14 @@ import math
 
 import pytest
 
-from macroblock.blocks import BlockInstance, ScriptGraph, create_default_registry
+from macroblock.blocks import (
+    BlockInstance,
+    FlowBehavior,
+    ScriptGraph,
+    create_default_registry,
+)
 from macroblock.blocks.registry import BlockDefinitionError
+from macroblock.engine.handlers import create_builtin_handlers
 
 
 def test_block_graph_json_round_trip_is_identical() -> None:
@@ -105,3 +111,15 @@ def test_parser_rejects_non_object_blocks_and_boolean_versions() -> None:
         ScriptGraph.from_dict(
             {"version": True, "name": "Bad version", "blocks": []}, registry
         )
+
+
+def test_every_category_has_multiple_functional_blocks() -> None:
+    registry = create_default_registry()
+    handlers = create_builtin_handlers()
+
+    for category in registry.categories:
+        definitions = registry.blocks_for_category(category.id)
+        assert len(definitions) >= 2, category.id
+        for definition in definitions:
+            if definition.flow is FlowBehavior.ACTION:
+                assert handlers.handler(definition.id) is not None, definition.id

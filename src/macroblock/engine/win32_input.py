@@ -76,6 +76,7 @@ class INPUT(ctypes.Structure):
 NAMED_KEYS = {
     "BACKSPACE": 0x08,
     "TAB": 0x09,
+    "CAPSLOCK": 0x14,
     "ENTER": 0x0D,
     "RETURN": 0x0D,
     "SHIFT": 0x10,
@@ -93,8 +94,21 @@ NAMED_KEYS = {
     "UP": 0x26,
     "RIGHT": 0x27,
     "DOWN": 0x28,
+    "INSERT": 0x2D,
     "DELETE": 0x2E,
+    "PRINTSCREEN": 0x2C,
     "WIN": 0x5B,
+    "WINDOWS": 0x5B,
+    "MENU": 0x5D,
+    "NUMLOCK": 0x90,
+    "SCROLLLOCK": 0x91,
+    "PAUSE": 0x13,
+}
+
+MOUSE_BUTTON_FLAGS = {
+    "left": (MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP),
+    "right": (MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP),
+    "middle": (MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP),
 }
 
 
@@ -115,6 +129,10 @@ class InputController:
             ctypes.c_int,
         )
         self.user32.SendInput.restype = wintypes.UINT
+        self.user32.VkKeyScanW.argtypes = (wintypes.WCHAR,)
+        self.user32.VkKeyScanW.restype = wintypes.SHORT
+        self.user32.GetAsyncKeyState.argtypes = (ctypes.c_int,)
+        self.user32.GetAsyncKeyState.restype = wintypes.SHORT
         self.user32.MonitorFromPoint.argtypes = (wintypes.POINT, wintypes.DWORD)
         self.user32.MonitorFromPoint.restype = wintypes.HMONITOR
 
@@ -189,13 +207,19 @@ class InputController:
         return True
 
     def click(self, button: str = "left", count: int = 1) -> None:
-        flags = {
-            "left": (MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP),
-            "right": (MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP),
-            "middle": (MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP),
-        }[button]
+        flags = MOUSE_BUTTON_FLAGS[button]
         for _ in range(count):
             self._send(self._mouse_input(flags[0]), self._mouse_input(flags[1]))
+
+    def button_down(self, button: str = "left") -> None:
+        self._send(self._mouse_input(MOUSE_BUTTON_FLAGS[button][0]))
+
+    def button_up(self, button: str = "left") -> None:
+        self._send(self._mouse_input(MOUSE_BUTTON_FLAGS[button][1]))
+
+    def move_by(self, dx: int, dy: int) -> bool:
+        x, y = self.cursor_position()
+        return self.move_to(x + dx, y + dy)
 
     def drag(self, x1: int, y1: int, x2: int, y2: int) -> bool:
         start = self._normalized_position(x1, y1)
@@ -222,18 +246,35 @@ class InputController:
         self._send(self._mouse_input(MOUSEEVENTF_WHEEL, data=amount * WHEEL_DELTA))
 
     def resolve_key(self, key: str) -> int:
-        normalized = key.strip().upper()
+        normalized = (
+            key.strip().upper().replace(" ", "").replace("_", "").replace("-", "")
+        )
+        if normalized.startswith("ARROW"):
+            normalized = normalized[5:]
         if normalized in NAMED_KEYS:
             return NAMED_KEYS[normalized]
         if normalized.startswith("F") and normalized[1:].isdigit():
             number = int(normalized[1:])
             if 1 <= number <= 24:
                 return 0x6F + number
-        if len(key) == 1:
-            value = self.user32.VkKeyScanW(key)
+        if len(normalized) == 1 and (
+            "A" <= normalized <= "Z" or "0" <= normalized <= "9"
+        ):
+            return ord(normalized)
+        if len(normalized) == 1:
+            value = self.user32.VkKeyScanW(normalized)
             if value != -1:
                 return value & 0xFF
         raise ValueError(f"Unknown key '{key}'.")
+
+    def hotkey_is_down(self, hotkey: str) -> bool:
+        keys = [part.strip() for part in hotkey.split("+") if part.strip()]
+        if not keys:
+            raise ValueError("Hotkey must contain at least one key.")
+        return all(
+            bool(self.user32.GetAsyncKeyState(self.resolve_key(key)) & 0x8000)
+            for key in keys
+        )
 
     def key_down(self, key: str) -> None:
         self._send(self._key_input(self.resolve_key(key)))
@@ -275,4 +316,3 @@ class InputController:
         if not self.user32.GetCursorPos(ctypes.byref(point)):
             raise ctypes.WinError(ctypes.get_last_error())
         return point.x, point.y
-

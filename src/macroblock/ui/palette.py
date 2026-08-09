@@ -22,6 +22,7 @@ class PalettePanel(QWidget):
     blockSelected = Signal(str)
     blockDragStarted = Signal(str)
     blockDragFinished = Signal(str, bool)
+    blockDoubleClicked = Signal(str)
 
     def __init__(self, registry: BlockRegistry, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -30,11 +31,13 @@ class PalettePanel(QWidget):
         self.block_widgets: list[PaletteBlockWidget] = []
         self.selected_type_id: str | None = None
         self.setFixedWidth(300)
+        self.setObjectName("palettePanel")
+        self.setStyleSheet("QWidget#palettePanel { background: #171717; }")
 
         root = QVBoxLayout(self)
         root.setContentsMargins(10, 10, 8, 10)
         heading = QLabel("Blocks")
-        heading.setStyleSheet("font-size: 20px; font-weight: 700;")
+        heading.setStyleSheet("font-size: 20px; font-weight: 700; color: white;")
         root.addWidget(heading)
 
         category_host = QWidget()
@@ -63,7 +66,17 @@ class PalettePanel(QWidget):
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
         self.scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        self.scroll.setStyleSheet(
+            "QScrollArea { background: transparent; }"
+            "QScrollBar:vertical { background: #111827; width: 11px; margin: 2px; }"
+            "QScrollBar::handle:vertical { background: #64748B; border-radius: 5px;"
+            " min-height: 32px; }"
+            "QScrollBar::handle:vertical:hover { background: #94A3B8; }"
+            "QScrollBar::add-line, QScrollBar::sub-line { height: 0; }"
+        )
         self.palette_host = QWidget()
+        self.palette_host.setStyleSheet("background: #171717;")
+        self.scroll.viewport().setStyleSheet("background: #171717;")
         self.palette_layout = QVBoxLayout(self.palette_host)
         self.palette_layout.setContentsMargins(2, 4, 5, 4)
         self.palette_layout.setSpacing(7)
@@ -78,6 +91,8 @@ class PalettePanel(QWidget):
     def show_category(self, category_id: str) -> None:
         for widget in self.block_widgets:
             self.palette_layout.removeWidget(widget)
+            widget.hide()
+            widget.setParent(None)
             widget.deleteLater()
         self.block_widgets.clear()
         for definition in self.registry.blocks_for_category(category_id):
@@ -85,6 +100,7 @@ class PalettePanel(QWidget):
             widget.selected.connect(self.select_block)
             widget.dragStarted.connect(self._drag_started)
             widget.dragFinished.connect(self.blockDragFinished)
+            widget.doubleClicked.connect(self.blockDoubleClicked)
             self.palette_layout.insertWidget(self.palette_layout.count() - 1, widget)
             self.block_widgets.append(widget)
         self.category_buttons[category_id].setChecked(True)
