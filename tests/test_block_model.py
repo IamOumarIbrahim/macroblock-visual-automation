@@ -70,6 +70,38 @@ def test_mutable_parameter_defaults_are_isolated_per_block() -> None:
     assert registry.block("keyboard.combo").defaults()["keys"] == ["CTRL", "C"]
 
 
+def test_mouse_button_actions_expose_five_friendly_choices() -> None:
+    registry = create_default_registry()
+    expected_values = ("left", "right", "back", "forward", "middle")
+    expected_labels = (
+        "Left click",
+        "Right click",
+        "Previous (side button)",
+        "Forward (side button)",
+        "Scroll wheel click",
+    )
+
+    for type_id in ("mouse.click", "mouse.button_down", "mouse.button_up"):
+        parameter = registry.block(type_id).parameters[0]
+        assert parameter.choices == expected_values
+        assert parameter.choice_labels == expected_labels
+
+
+def test_older_move_blocks_receive_the_new_duration_default_when_loaded() -> None:
+    registry = create_default_registry()
+    block = BlockInstance.from_dict(
+        {
+            "id": "legacy-move",
+            "type": "mouse.move_to",
+            "params": {"x": 10, "y": 20},
+            "next": None,
+        },
+        registry,
+    )
+
+    assert block.params == {"x": 10, "y": 20, "duration": 0.2}
+
+
 def test_graph_rejects_cycles_and_blocks_with_multiple_parents() -> None:
     registry = create_default_registry()
     first = BlockInstance.create(registry, "timing.wait", instance_id="first")

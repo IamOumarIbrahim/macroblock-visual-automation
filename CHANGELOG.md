@@ -26,6 +26,10 @@ All notable changes to Macroblock will be documented here. The format follows
   scrollbars, gesture hints, and clearer live status messages.
 - Macroblock now requires elevation both from source and through the packaged
   executable's UAC administrator manifest.
+- Mouse movement blocks now expose an editable glide time so consecutive
+  destinations remain visibly distinct inside fast or repeated sequences.
+- Replaced the Windows system-alert connection sound with a bundled,
+  deterministic wooden toy-block snap.
 
 ### Fixed
 
@@ -34,6 +38,10 @@ All notable changes to Macroblock will be documented here. The format follows
 - Fixed A-Z, 0-9, function-key, arrow-key, and key-combination resolution in
   the Win32 input layer.
 - Fixed unresponsive numeric up/down buttons embedded in canvas blocks.
+- Fixed clipped mouse-button dropdowns and added functional previous, forward,
+  and scroll-wheel button choices to click, hold, and release blocks.
+- Added regression coverage for repeated Wait -> Move -> Move chains so every
+  cursor destination executes in order.
 
 ### Added
 
@@ -51,5 +59,7 @@ All notable changes to Macroblock will be documented here. The format follows
 - Topmost, layered, click-through live cursor crosshair.
 - Versioned, atomic, local-only `.mbk` persistence with clear validation errors.
 - Reproducible single-file Windows packaging with PyInstaller.
+- Red in-block keystroke recorders for Key Combo, Hold Key, and Release Key;
+  successful recordings replace the existing value while cancel keeps it.
 
 [Unreleased]: https://github.com/IamOumarIbrahim/macroblock/commits/main

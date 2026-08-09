@@ -41,7 +41,10 @@ def create_builtin_handlers() -> BlockHandlerRegistry:
     handlers.register(
         "mouse.move_to",
         lambda block, context: context.input.move_to(
-            block.params["x"], block.params["y"]
+            block.params["x"],
+            block.params["y"],
+            block.params["duration"],
+            context.abort_event,
         ),
     )
     handlers.register(
@@ -66,7 +69,10 @@ def create_builtin_handlers() -> BlockHandlerRegistry:
     handlers.register(
         "mouse.move_by",
         lambda block, context: context.input.move_by(
-            block.params["dx"], block.params["dy"]
+            block.params["dx"],
+            block.params["dy"],
+            block.params["duration"],
+            context.abort_event,
         ),
     )
     handlers.register(

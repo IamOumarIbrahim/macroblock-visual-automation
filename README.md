@@ -11,13 +11,14 @@ into a sequence, and run the result without writing code.
 
 ## Features
 
-- Mouse movement, clicks, drags, and scrolling through Win32 `SendInput`
-- Key presses, Unicode text, and key combinations
+- Smooth or instant mouse movement, five-button clicks/holds/releases, drags,
+  and scrolling through Win32 `SendInput`
+- Key presses, Unicode text, key combinations, and in-block chord recording
 - Waits, counted and until-stopped loops, variables, and event entry blocks
 - Expandable C-shaped loops that visibly encapsulate complete block stacks,
   including other nested loops
 - Numbered blocks, high-contrast connection arrows, snap previews, drag glow,
-  combination pulse/click feedback, zooming, and space-drag panning
+  combination pulse/wooden-snap feedback, zooming, and space-drag panning
 - Duplicate one block with Alt+click, or duplicate a multi-selection while
   preserving its internal links
 - System automation for files, folders, URLs, programs, and multiline
@@ -66,7 +67,8 @@ policy changes. Contributors who prefer activation can instead run
    right-click empty canvas space to duplicate the selection and its links.
 7. Edit numbers, text, choices, key lists, paths, URLs, and multiline scripts
    directly on each block. The arrow buttons on numeric fields increment and
-   decrement their value.
+   decrement their value. The red dot on Key Combo, Hold Key, and Release Key
+   records and replaces the current key value; press Esc to cancel recording.
 8. Select a block and press Delete, or right-click it for duplicate,
    disconnect, and delete operations.
 9. Choose **Run Script**. A **When Hotkey Pressed** entry waits for its hotkey;
@@ -76,7 +78,8 @@ policy changes. Contributors who prefer activation can instead run
 
 ## Built-in automation blocks
 
-- **Mouse:** absolute/relative movement, click, drag, scroll, and button hold/release
+- **Mouse:** smooth absolute/relative movement, five-button click/hold/release
+  (including previous, forward, and wheel click), drag, and scroll
 - **Keyboard:** key press, text entry, key combinations, and key hold/release
 - **Timing:** fixed and randomized interruptible waits
 - **Control:** counted/forever loops, variable conditions, and stop

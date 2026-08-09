@@ -13,6 +13,9 @@ if (-not (Test-Path -LiteralPath $python)) {
 & $python (Join-Path $repoRoot "tools\generate_icon.py")
 if ($LASTEXITCODE -ne 0) { throw "Icon generation failed." }
 
+& $python (Join-Path $repoRoot "tools\generate_connect_sound.py")
+if ($LASTEXITCODE -ne 0) { throw "Connect sound generation failed." }
+
 & $python -m PyInstaller `
     --noconfirm `
     --clean `
@@ -22,6 +25,7 @@ if ($LASTEXITCODE -ne 0) { throw "Icon generation failed." }
     --name Macroblock `
     --icon (Join-Path $repoRoot "assets\icons\macroblock.ico") `
     --add-data "$(Join-Path $repoRoot 'assets\icons\macroblock.ico');assets\icons" `
+    --add-data "$(Join-Path $repoRoot 'assets\sounds\block-connect.wav');assets\sounds" `
     --paths (Join-Path $repoRoot "src") `
     --distpath (Join-Path $repoRoot "dist") `
     --workpath (Join-Path $repoRoot "build\pyinstaller") `

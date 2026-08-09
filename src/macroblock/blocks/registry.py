@@ -45,8 +45,13 @@ class ParameterDefinition:
     default: Any
     choices: tuple[str, ...] = ()
     minimum: float | None = None
+    choice_labels: tuple[str, ...] = ()
 
     def validate(self, value: Any) -> None:
+        if self.choice_labels and len(self.choice_labels) != len(self.choices):
+            raise BlockDefinitionError(
+                f"Parameter '{self.id}' must provide one label for every choice."
+            )
         if self.type is ParameterType.INTEGER:
             valid = isinstance(value, int) and not isinstance(value, bool)
         elif self.type is ParameterType.NUMBER:

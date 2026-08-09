@@ -13,6 +13,7 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
 from macroblock.ui.main_window import MainWindow
+from macroblock.resources import asset_path
 
 
 def enable_per_monitor_v2_awareness() -> None:
@@ -29,9 +30,7 @@ def enable_per_monitor_v2_awareness() -> None:
 
 
 def app_icon_path() -> Path:
-    if bundle_root := getattr(sys, "_MEIPASS", None):
-        return Path(bundle_root) / "assets" / "icons" / "macroblock.ico"
-    return Path(__file__).resolve().parents[2] / "assets" / "icons" / "macroblock.ico"
+    return asset_path("icons", "macroblock.ico")
 
 
 def is_administrator() -> bool:

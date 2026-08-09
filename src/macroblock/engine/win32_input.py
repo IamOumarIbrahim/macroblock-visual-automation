@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import ctypes
 import logging
+import math
 import sys
+import threading
+import time
 from ctypes import wintypes
 
 logger = logging.getLogger(__name__)
@@ -19,6 +22,8 @@ MOUSEEVENTF_RIGHTDOWN = 0x0008
 MOUSEEVENTF_RIGHTUP = 0x0010
 MOUSEEVENTF_MIDDLEDOWN = 0x0020
 MOUSEEVENTF_MIDDLEUP = 0x0040
+MOUSEEVENTF_XDOWN = 0x0080
+MOUSEEVENTF_XUP = 0x0100
 MOUSEEVENTF_WHEEL = 0x0800
 MOUSEEVENTF_VIRTUALDESK = 0x4000
 MOUSEEVENTF_ABSOLUTE = 0x8000
@@ -26,6 +31,8 @@ MOUSEEVENTF_ABSOLUTE = 0x8000
 KEYEVENTF_KEYUP = 0x0002
 KEYEVENTF_UNICODE = 0x0004
 WHEEL_DELTA = 120
+XBUTTON1 = 0x0001
+XBUTTON2 = 0x0002
 
 SM_XVIRTUALSCREEN = 76
 SM_YVIRTUALSCREEN = 77
@@ -103,12 +110,25 @@ NAMED_KEYS = {
     "NUMLOCK": 0x90,
     "SCROLLLOCK": 0x91,
     "PAUSE": 0x13,
+    "SEMICOLON": 0xBA,
+    "PLUS": 0xBB,
+    "COMMA": 0xBC,
+    "MINUS": 0xBD,
+    "PERIOD": 0xBE,
+    "SLASH": 0xBF,
+    "BACKTICK": 0xC0,
+    "LEFTBRACKET": 0xDB,
+    "BACKSLASH": 0xDC,
+    "RIGHTBRACKET": 0xDD,
+    "QUOTE": 0xDE,
 }
 
 MOUSE_BUTTON_FLAGS = {
-    "left": (MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP),
-    "right": (MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP),
-    "middle": (MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP),
+    "left": (MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, 0),
+    "right": (MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP, 0),
+    "back": (MOUSEEVENTF_XDOWN, MOUSEEVENTF_XUP, XBUTTON1),
+    "forward": (MOUSEEVENTF_XDOWN, MOUSEEVENTF_XUP, XBUTTON2),
+    "middle": (MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP, 0),
 }
 
 
@@ -193,33 +213,90 @@ class InputController:
         normalized_y = round((y - top) * 65535 / max(1, height - 1))
         return normalized_x, normalized_y
 
-    def move_to(self, x: int, y: int) -> bool:
-        position = self._normalized_position(x, y)
-        if position is None:
+    def move_to(
+        self,
+        x: int,
+        y: int,
+        duration: float = 0.0,
+        abort_event: threading.Event | None = None,
+    ) -> bool:
+        target = self._normalized_position(x, y)
+        if target is None:
             return False
-        self._send(
-            self._mouse_input(
-                MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK,
-                dx=position[0],
-                dy=position[1],
+        duration = float(duration)
+        if not math.isfinite(duration) or duration < 0:
+            raise ValueError("Mouse move duration must be a finite non-negative number.")
+        if duration == 0:
+            self._send(
+                self._mouse_input(
+                    MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK,
+                    dx=target[0],
+                    dy=target[1],
+                )
             )
-        )
+            return True
+
+        start = self._normalized_position(*self.cursor_position())
+        if start is None:
+            start = target
+        steps = max(2, min(240, round(duration * 60)))
+        started = time.monotonic()
+        for step in range(1, steps + 1):
+            deadline = started + duration * step / steps
+            remaining = deadline - time.monotonic()
+            if remaining > 0:
+                if abort_event is not None:
+                    if abort_event.wait(remaining):
+                        return False
+                else:
+                    time.sleep(remaining)
+            progress = step / steps
+            self._send(
+                self._mouse_input(
+                    MOUSEEVENTF_MOVE
+                    | MOUSEEVENTF_ABSOLUTE
+                    | MOUSEEVENTF_VIRTUALDESK,
+                    dx=round(start[0] + (target[0] - start[0]) * progress),
+                    dy=round(start[1] + (target[1] - start[1]) * progress),
+                )
+            )
         return True
 
+    @staticmethod
+    def _mouse_button_flags(button: str) -> tuple[int, int, int]:
+        try:
+            return MOUSE_BUTTON_FLAGS[button]
+        except KeyError as error:
+            choices = ", ".join(MOUSE_BUTTON_FLAGS)
+            raise ValueError(
+                f"Unknown mouse button '{button}'. Choose one of: {choices}."
+            ) from error
+
     def click(self, button: str = "left", count: int = 1) -> None:
-        flags = MOUSE_BUTTON_FLAGS[button]
+        down, up, data = self._mouse_button_flags(button)
         for _ in range(count):
-            self._send(self._mouse_input(flags[0]), self._mouse_input(flags[1]))
+            self._send(
+                self._mouse_input(down, data=data),
+                self._mouse_input(up, data=data),
+            )
 
     def button_down(self, button: str = "left") -> None:
-        self._send(self._mouse_input(MOUSE_BUTTON_FLAGS[button][0]))
+        down, _up, data = self._mouse_button_flags(button)
+        self._send(self._mouse_input(down, data=data))
 
     def button_up(self, button: str = "left") -> None:
-        self._send(self._mouse_input(MOUSE_BUTTON_FLAGS[button][1]))
+        _down, up, data = self._mouse_button_flags(button)
+        self._send(self._mouse_input(up, data=data))
 
-    def move_by(self, dx: int, dy: int) -> bool:
+    def move_by(
+        self,
+        dx: int,
+        dy: int,
+        duration: float = 0.0,
+        abort_event: threading.Event | None = None,
+    ) -> bool:
         x, y = self.cursor_position()
-        return self.move_to(x + dx, y + dy)
+        return self.move_to(x + dx, y + dy, duration, abort_event)
 
     def drag(self, x1: int, y1: int, x2: int, y2: int) -> bool:
         start = self._normalized_position(x1, y1)

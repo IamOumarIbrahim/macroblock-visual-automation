@@ -6,9 +6,10 @@ import json
 from collections.abc import Callable
 from typing import Any
 
-from PySide6.QtCore import QPoint, QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QDrag, QPainter, QPainterPath, QPen
+from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QDrag, QKeyEvent, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
+    QApplication,
     QComboBox,
     QDoubleSpinBox,
     QFrame,
@@ -17,6 +18,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QPlainTextEdit,
     QSpinBox,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -38,6 +40,177 @@ class CommitPlainTextEdit(QPlainTextEdit):
     def focusOutEvent(self, event) -> None:
         self.editingFinished.emit()
         super().focusOutEvent(event)
+
+
+_KEY_TOKENS = {
+    int(Qt.Key.Key_Backspace): "BACKSPACE",
+    int(Qt.Key.Key_Tab): "TAB",
+    int(Qt.Key.Key_Backtab): "TAB",
+    int(Qt.Key.Key_CapsLock): "CAPSLOCK",
+    int(Qt.Key.Key_Return): "ENTER",
+    int(Qt.Key.Key_Enter): "ENTER",
+    int(Qt.Key.Key_Shift): "SHIFT",
+    int(Qt.Key.Key_Control): "CTRL",
+    int(Qt.Key.Key_Alt): "ALT",
+    int(Qt.Key.Key_AltGr): "ALT",
+    int(Qt.Key.Key_Escape): "ESC",
+    int(Qt.Key.Key_Space): "SPACE",
+    int(Qt.Key.Key_PageUp): "PAGEUP",
+    int(Qt.Key.Key_PageDown): "PAGEDOWN",
+    int(Qt.Key.Key_End): "END",
+    int(Qt.Key.Key_Home): "HOME",
+    int(Qt.Key.Key_Left): "LEFT",
+    int(Qt.Key.Key_Up): "UP",
+    int(Qt.Key.Key_Right): "RIGHT",
+    int(Qt.Key.Key_Down): "DOWN",
+    int(Qt.Key.Key_Insert): "INSERT",
+    int(Qt.Key.Key_Delete): "DELETE",
+    int(Qt.Key.Key_Print): "PRINTSCREEN",
+    int(Qt.Key.Key_Meta): "WIN",
+    int(Qt.Key.Key_Menu): "MENU",
+    int(Qt.Key.Key_NumLock): "NUMLOCK",
+    int(Qt.Key.Key_ScrollLock): "SCROLLLOCK",
+    int(Qt.Key.Key_Pause): "PAUSE",
+    int(Qt.Key.Key_Plus): "PLUS",
+    int(Qt.Key.Key_Minus): "MINUS",
+    int(Qt.Key.Key_Comma): "COMMA",
+    int(Qt.Key.Key_Period): "PERIOD",
+    int(Qt.Key.Key_Slash): "SLASH",
+    int(Qt.Key.Key_Backslash): "BACKSLASH",
+    int(Qt.Key.Key_Semicolon): "SEMICOLON",
+    int(Qt.Key.Key_Apostrophe): "QUOTE",
+    int(Qt.Key.Key_BracketLeft): "LEFTBRACKET",
+    int(Qt.Key.Key_BracketRight): "RIGHTBRACKET",
+    int(Qt.Key.Key_QuoteLeft): "BACKTICK",
+}
+
+
+def _recorded_key_token(event: QKeyEvent) -> str | None:
+    """Translate a Qt key event into the names understood by SendInput."""
+
+    key = event.key()
+    if token := _KEY_TOKENS.get(key):
+        return token
+    if int(Qt.Key.Key_F1) <= key <= int(Qt.Key.Key_F24):
+        return f"F{key - int(Qt.Key.Key_F1) + 1}"
+    if int(Qt.Key.Key_A) <= key <= int(Qt.Key.Key_Z):
+        return chr(key)
+    if int(Qt.Key.Key_0) <= key <= int(Qt.Key.Key_9):
+        return chr(key)
+    text = event.text()
+    if len(text) == 1 and text.isprintable():
+        return text.upper()
+    return None
+
+
+class KeystrokeRecordButton(QToolButton):
+    """Captures one key or a complete chord without leaving the block."""
+
+    valueRecorded = Signal(object)
+    statusMessage = Signal(str)
+
+    def __init__(self, *, multiple: bool, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.multiple = multiple
+        self._recording = False
+        self._held: set[int] = set()
+        self._recorded: list[str] = []
+        self._timeout = QTimer(self)
+        self._timeout.setSingleShot(True)
+        self._timeout.timeout.connect(self.cancel_recording)
+        self.setCheckable(True)
+        self.setFixedSize(24, 24)
+        self.setText("\u25cf")
+        self.setAccessibleName("Record key combination" if multiple else "Record key")
+        self.setToolTip(
+            "Record a new key combination" if multiple else "Record a new key"
+        )
+        self.setStyleSheet(
+            "QToolButton { background: #EF4444; color: white; border: 2px solid "
+            "rgba(255,255,255,210); border-radius: 12px; padding: 0; }"
+            "QToolButton:hover { background: #DC2626; border-color: white; }"
+            "QToolButton:checked { background: #B91C1C; border: 3px solid white; }"
+        )
+        self.clicked.connect(self._toggle_recording)
+
+    @property
+    def is_recording(self) -> bool:
+        return self._recording
+
+    def _toggle_recording(self, checked: bool) -> None:
+        if checked:
+            self.start_recording()
+        else:
+            self.cancel_recording()
+
+    def start_recording(self) -> None:
+        app = QApplication.instance()
+        if app is None:
+            self.setChecked(False)
+            return
+        if not self._recording:
+            app.installEventFilter(self)
+        self._recording = True
+        self._held.clear()
+        self._recorded.clear()
+        self.setChecked(True)
+        self._timeout.start(10_000)
+        target = "the chord" if self.multiple else "one key"
+        self.statusMessage.emit(
+            f"Recording {target} - press and release it now; Esc cancels."
+        )
+
+    def cancel_recording(self) -> None:
+        if not self._recording:
+            self.setChecked(False)
+            return
+        self._stop_recording(commit=False)
+        self.statusMessage.emit("Key recording cancelled; the existing value was kept.")
+
+    def _stop_recording(self, *, commit: bool) -> None:
+        app = QApplication.instance()
+        if app is not None:
+            app.removeEventFilter(self)
+        self._timeout.stop()
+        self._recording = False
+        self.setChecked(False)
+        if not commit or not self._recorded:
+            return
+        value: object = list(self._recorded) if self.multiple else self._recorded[0]
+        self.valueRecorded.emit(value)
+        self.statusMessage.emit(f"Recorded {' + '.join(self._recorded)}.")
+
+    def eventFilter(self, watched, event) -> bool:
+        if not self._recording:
+            return False
+        if event.type() == QEvent.Type.ShortcutOverride:
+            event.accept()
+            return True
+        if event.type() == QEvent.Type.KeyPress:
+            key_event = event
+            if key_event.isAutoRepeat():
+                return True
+            if key_event.key() == int(Qt.Key.Key_Escape):
+                self.cancel_recording()
+                return True
+            token = _recorded_key_token(key_event)
+            if token is not None and (self.multiple or not self._recorded):
+                self._held.add(key_event.key())
+                if token not in self._recorded:
+                    self._recorded.append(token)
+                self.statusMessage.emit(
+                    f"Recording: {' + '.join(self._recorded)} - release to save."
+                )
+            return True
+        if event.type() == QEvent.Type.KeyRelease:
+            key_event = event
+            if key_event.isAutoRepeat():
+                return True
+            self._held.discard(key_event.key())
+            if self._recorded and not self._held:
+                self._stop_recording(commit=True)
+            return True
+        return False
 
 
 class BlockDragHandle(QLabel):
@@ -88,6 +261,7 @@ class BlockEditorWidget(QFrame):
     pointerPressed = Signal(object, object)
     pointerMoved = Signal(object, object)
     pointerReleased = Signal(object, object)
+    interactionMessage = Signal(str)
     CONTAINER_FOOTER_HEIGHT = 42
     EMPTY_CONTAINER_BODY_HEIGHT = 62
 
@@ -101,6 +275,7 @@ class BlockEditorWidget(QFrame):
         self.definition = definition
         self.block = block
         self.editors: dict[str, QWidget] = {}
+        self.record_buttons: dict[str, KeystrokeRecordButton] = {}
         self._visual_state = "normal"
         self._display_number = 0
         self._base_color = QColor(definition.color)
@@ -124,6 +299,12 @@ class BlockEditorWidget(QFrame):
             "subcontrol-origin: border; subcontrol-position: top right; }"
             "QSpinBox::down-button, QDoubleSpinBox::down-button {"
             "subcontrol-origin: border; subcontrol-position: bottom right; }"
+            "QComboBox { padding-right: 31px; min-width: 190px; }"
+            "QComboBox::drop-down { subcontrol-origin: padding; subcontrol-position: "
+            "top right; width: 27px; border-left: 1px solid rgba(0,0,0,45); }"
+            "QComboBox QAbstractItemView { background: white; color: #111827; "
+            "border: 1px solid #94A3B8; border-radius: 7px; padding: 5px; "
+            "selection-background-color: #DBEAFE; selection-color: #111827; }"
         )
         self.setMinimumWidth(238)
 
@@ -169,11 +350,41 @@ class BlockEditorWidget(QFrame):
                 self.parameterChanged.emit(param.id, value)
 
             if isinstance(editor, QComboBox):
-                editor.currentTextChanged.connect(lambda _text, callback=update: callback())
+                editor.currentIndexChanged.connect(
+                    lambda _index, callback=update: callback()
+                )
             elif isinstance(editor, (QSpinBox, QDoubleSpinBox)):
                 editor.valueChanged.connect(lambda _value, callback=update: callback())
             else:
                 editor.editingFinished.connect(update)
+
+            if (
+                definition.id == "keyboard.combo"
+                and parameter.id == "keys"
+            ) or (
+                definition.id in {"keyboard.key_down", "keyboard.key_up"}
+                and parameter.id == "key"
+            ):
+                recorder = KeystrokeRecordButton(
+                    multiple=parameter.type is ParameterType.KEY_LIST,
+                    parent=self,
+                )
+                recorder.statusMessage.connect(self.interactionMessage.emit)
+
+                def apply_recording(
+                    value: object,
+                    target: QWidget = editor,
+                    callback: Callable[[], Any] = update,
+                ) -> None:
+                    if isinstance(target, QLineEdit):
+                        target.setText(
+                            " + ".join(value) if isinstance(value, list) else str(value)
+                        )
+                    callback()
+
+                recorder.valueRecorded.connect(apply_recording)
+                self.record_buttons[parameter.id] = recorder
+                row.addWidget(recorder)
             root.addLayout(row)
         self.adjustSize()
         self._header_height = max(66, self.sizeHint().height())
@@ -402,9 +613,15 @@ class BlockEditorWidget(QFrame):
             return editor, editor.value
         if parameter.type is ParameterType.CHOICE:
             editor = QComboBox()
-            editor.addItems(parameter.choices)
-            editor.setCurrentText(value)
-            return editor, editor.currentText
+            labels = parameter.choice_labels or parameter.choices
+            for choice, label in zip(parameter.choices, labels):
+                editor.addItem(label, choice)
+            index = editor.findData(value)
+            editor.setCurrentIndex(max(0, index))
+            editor.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+            editor.setMaxVisibleItems(max(5, len(parameter.choices)))
+            editor.view().setMinimumWidth(260)
+            return editor, editor.currentData
 
         if parameter.type is ParameterType.LONG_TEXT:
             editor = CommitPlainTextEdit()

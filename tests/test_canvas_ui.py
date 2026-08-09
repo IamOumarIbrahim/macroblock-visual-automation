@@ -1,8 +1,9 @@
 from PySide6.QtCore import QPoint, QPointF, Qt
 from PySide6.QtGui import QDragEnterEvent, QDragMoveEvent, QDropEvent, QKeyEvent
-from PySide6.QtWidgets import QApplication, QPlainTextEdit, QSpinBox
+from PySide6.QtWidgets import QApplication, QComboBox, QLineEdit, QPlainTextEdit, QSpinBox
 from PySide6.QtTest import QTest
 
+from macroblock.ui import canvas as canvas_module
 from macroblock.ui.main_window import MainWindow
 
 
@@ -491,3 +492,91 @@ def test_shell_script_block_has_a_multiline_editable_field() -> None:
     assert item.block.params["script"] == "$value = 42\nWrite-Output $value"
     assert editor.height() >= 80
     window.close()
+
+
+def test_mouse_dropdown_shows_friendly_complete_button_names() -> None:
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow()
+    item = window.canvas.canvas_scene.add_block("mouse.click", QPointF(80, 80))
+    editor = item.editor.editors["button"]
+    assert isinstance(editor, QComboBox)
+
+    assert [editor.itemText(index) for index in range(editor.count())] == [
+        "Left click",
+        "Right click",
+        "Previous (side button)",
+        "Forward (side button)",
+        "Scroll wheel click",
+    ]
+    assert [editor.itemData(index) for index in range(editor.count())] == [
+        "left",
+        "right",
+        "back",
+        "forward",
+        "middle",
+    ]
+    assert editor.view().minimumWidth() >= 260
+    editor.setCurrentIndex(editor.findData("back"))
+    app.processEvents()
+    assert item.block.params["button"] == "back"
+    window.close()
+
+
+def test_red_key_recorders_replace_combo_hold_and_release_values() -> None:
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow()
+    window.show()
+    scene = window.canvas.canvas_scene
+    combo = scene.add_block("keyboard.combo", QPointF(80, 80))
+    hold = scene.add_block("keyboard.key_down", QPointF(400, 80))
+    release = scene.add_block("keyboard.key_up", QPointF(720, 80))
+    app.processEvents()
+
+    combo_button = combo.editor.record_buttons["keys"]
+    combo_field = combo.editor.editors["keys"]
+    assert isinstance(combo_field, QLineEdit)
+    combo_button.click()
+    QTest.keyPress(combo_button, Qt.Key.Key_Control)
+    QTest.keyPress(combo_button, Qt.Key.Key_K)
+    QTest.keyRelease(combo_button, Qt.Key.Key_K)
+    QTest.keyRelease(combo_button, Qt.Key.Key_Control)
+    app.processEvents()
+    assert combo.block.params["keys"] == ["CTRL", "K"]
+    assert combo_field.text() == "CTRL + K"
+    assert combo_button.is_recording is False
+
+    for item in (hold, release):
+        record_button = item.editor.record_buttons["key"]
+        record_button.click()
+        QTest.keyClick(record_button, Qt.Key.Key_F5)
+        app.processEvents()
+        assert item.block.params["key"] == "F5"
+        assert record_button.is_recording is False
+    window.close()
+
+
+def test_connect_sound_uses_the_bundled_wav_instead_of_a_system_alert(
+    tmp_path, monkeypatch
+) -> None:
+    sound = tmp_path / "block-connect.wav"
+    sound.write_bytes(b"RIFF")
+    played = []
+
+    class AudibleApplication:
+        @staticmethod
+        def platformName():
+            return "windows"
+
+    monkeypatch.setattr(canvas_module, "QApplication", AudibleApplication)
+    monkeypatch.setattr(canvas_module, "asset_path", lambda *_parts: sound)
+    monkeypatch.setattr(
+        canvas_module.winsound,
+        "PlaySound",
+        lambda path, flags: played.append((path, flags)),
+    )
+
+    canvas_module.CanvasScene.play_connect_sound()
+
+    assert played[0][0] == str(sound)
+    assert played[0][1] & canvas_module.winsound.SND_FILENAME
+    assert not (played[0][1] & canvas_module.winsound.SND_ALIAS)

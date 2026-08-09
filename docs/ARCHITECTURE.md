@@ -52,6 +52,16 @@ behind a small interface.
 - A flow-ordered numbering pass and right-edge link arrows make sequence order
   explicit. Transient QPropertyAnimation scale pulses and drop-shadow state
   provide combine/drag feedback without changing persisted geometry.
+- Choice parameters keep stable internal values separate from human-facing
+  labels, allowing complete mouse-button names without breaking old saves.
+  Keyboard recorder buttons temporarily filter Qt key events, commit only
+  after the captured chord is released, and never require global hooks.
+- Cursor move actions interpolate absolute virtual-desktop coordinates over an
+  editable duration. This keeps back-to-back destinations observable without
+  adding hidden delays to unrelated actions.
+- Runtime assets resolve from either the source tree or PyInstaller's bundle
+  directory. The generated WAV connection cue is included as a filename-based
+  sound, so no Windows system alert alias is invoked.
 - Duplication clones parameter values and only recreates `next`/`child` edges
   whose endpoints are both selected, preventing accidental links back into the
   source graph.

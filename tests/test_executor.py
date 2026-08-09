@@ -11,8 +11,8 @@ class FakeInput:
     def __init__(self) -> None:
         self.actions = []
 
-    def move_to(self, x, y):
-        self.actions.append(("move", x, y))
+    def move_to(self, x, y, duration=0.0, abort_event=None):
+        self.actions.append(("move", x, y, duration))
         return True
 
     def click(self, button, count):
@@ -34,8 +34,8 @@ class FakeInput:
     def key_combo(self, keys):
         self.actions.append(("combo", keys))
 
-    def move_by(self, dx, dy):
-        self.actions.append(("move_by", dx, dy))
+    def move_by(self, dx, dy, duration=0.0, abort_event=None):
+        self.actions.append(("move_by", dx, dy, duration))
         return True
 
     def button_down(self, button):
@@ -85,8 +85,8 @@ def test_executor_walks_nested_graph_and_variables() -> None:
     assert result.variables == {"runs": 2}
     assert fake.actions == [
         ("hotkey_check", "Ctrl+Alt+M"),
-        ("move", 20, 30),
-        ("move", 20, 30),
+        ("move", 20, 30, 0.2),
+        ("move", 20, 30, 0.2),
     ]
     assert result.executed_blocks == 6
 
@@ -206,7 +206,7 @@ def test_new_mouse_keyboard_and_event_blocks_execute() -> None:
 
     assert result.status == "completed"
     assert fake.actions == [
-        ("move_by", 12, -4),
+        ("move_by", 12, -4, 0.2),
         ("button_down", "left"),
         ("button_up", "left"),
         ("press", "A"),
@@ -243,6 +243,47 @@ def test_variable_condition_executes_only_when_equal() -> None:
     )
 
     assert fake.actions == [("click", "left", 1)]
+
+
+def test_repeat_executes_each_sequential_cursor_destination_in_order() -> None:
+    registry = create_default_registry()
+    repeat = BlockInstance.create(
+        registry, "control.repeat", instance_id="repeat", params={"count": 2}
+    )
+    wait = BlockInstance.create(
+        registry, "timing.wait", instance_id="wait", params={"seconds": 0}
+    )
+    first_move = BlockInstance.create(
+        registry,
+        "mouse.move_to",
+        instance_id="first_move",
+        params={"x": 120, "y": 240, "duration": 0.15},
+    )
+    second_move = BlockInstance.create(
+        registry,
+        "mouse.move_to",
+        instance_id="second_move",
+        params={"x": 640, "y": 480, "duration": 0.25},
+    )
+    repeat.child_id = wait.instance_id
+    wait.next_id = first_move.instance_id
+    first_move.next_id = second_move.instance_id
+    fake = FakeInput()
+
+    result = ScriptExecutor(registry, fake).execute(
+        ScriptGraph.from_blocks(
+            "Two visible moves", [repeat, wait, first_move, second_move]
+        ),
+        threading.Event(),
+    )
+
+    assert result.status == "completed"
+    assert fake.actions == [
+        ("move", 120, 240, 0.15),
+        ("move", 640, 480, 0.25),
+        ("move", 120, 240, 0.15),
+        ("move", 640, 480, 0.25),
+    ]
 
 
 def test_system_blocks_open_and_launch_with_editable_values(
@@ -379,4 +420,37 @@ def test_win32_key_resolution_supports_letters_digits_and_hotkeys() -> None:
     assert controller.resolve_key("7") == 0x37
     assert controller.resolve_key("F12") == 0x7B
     assert controller.resolve_key("Arrow Up") == 0x26
+    assert controller.resolve_key("PLUS") == 0xBB
     assert controller.hotkey_is_down("Ctrl + A") is True
+
+
+def test_win32_side_mouse_buttons_include_the_required_xbutton_data() -> None:
+    controller = InputController.__new__(InputController)
+    sent = []
+    controller._send = lambda *inputs: sent.extend(inputs)
+
+    controller.click("back")
+    controller.button_down("forward")
+    controller.button_up("forward")
+
+    assert [(event.mi.dwFlags, event.mi.mouseData) for event in sent] == [
+        (0x0080, 0x0001),
+        (0x0100, 0x0001),
+        (0x0080, 0x0002),
+        (0x0100, 0x0002),
+    ]
+
+
+def test_smooth_mouse_move_honors_the_global_abort_event() -> None:
+    controller = InputController.__new__(InputController)
+    controller._normalized_position = lambda x, y: (x, y)
+    controller.cursor_position = lambda: (0, 0)
+    sent = []
+    controller._send = lambda *inputs: sent.extend(inputs)
+    abort_event = threading.Event()
+    abort_event.set()
+
+    moved = controller.move_to(100, 200, 10.0, abort_event)
+
+    assert moved is False
+    assert sent == []

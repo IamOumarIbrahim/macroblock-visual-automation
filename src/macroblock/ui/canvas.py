@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import math
-import os
 import winsound
 from dataclasses import dataclass
 
@@ -29,6 +28,7 @@ from PySide6.QtWidgets import (
 )
 
 from macroblock.blocks import BlockInstance, BlockRegistry, ScriptGraph
+from macroblock.resources import asset_path
 from macroblock.ui.block_widgets import BlockEditorWidget, PaletteBlockWidget
 
 
@@ -55,6 +55,7 @@ class BlockGraphicsItem(QGraphicsProxyWidget):
         self._dragging = False
         editor = BlockEditorWidget(definition, block)
         editor.parameterChanged.connect(lambda *_args: scene.on_graph_changed())
+        editor.interactionMessage.connect(scene.interactionMessage.emit)
         editor.pointerPressed.connect(self._begin_manual_drag)
         editor.pointerMoved.connect(self._move_manual_drag)
         editor.pointerReleased.connect(self._finish_manual_drag)
@@ -486,15 +487,18 @@ class CanvasScene(QGraphicsScene):
 
     @staticmethod
     def play_connect_sound() -> None:
-        if os.name != "nt" or QApplication.platformName() == "offscreen":
+        if QApplication.platformName() == "offscreen":
+            return
+        sound = asset_path("sounds", "block-connect.wav")
+        if not sound.exists():
             return
         try:
             winsound.PlaySound(
-                "SystemAsterisk",
-                winsound.SND_ALIAS | winsound.SND_ASYNC | winsound.SND_NODEFAULT,
+                str(sound),
+                winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT,
             )
         except RuntimeError:
-            QApplication.beep()
+            return
 
     def move_connected_items(
         self,

@@ -22,20 +22,40 @@ CATEGORIES = (
     CategoryDefinition("system", "System", "#0F766E"),
 )
 
+MOUSE_BUTTON_CHOICES = ("left", "right", "back", "forward", "middle")
+MOUSE_BUTTON_LABELS = (
+    "Left click",
+    "Right click",
+    "Previous (side button)",
+    "Forward (side button)",
+    "Scroll wheel click",
+)
+
 
 BLOCKS = (
     BlockDefinition(
         "mouse.move_to",
         "mouse",
         "Move Cursor To",
-        (Param("x", "X", Type.INTEGER, 500), Param("y", "Y", Type.INTEGER, 300)),
+        (
+            Param("x", "X", Type.INTEGER, 500),
+            Param("y", "Y", Type.INTEGER, 300),
+            Param("duration", "Move time", Type.NUMBER, 0.2, minimum=0),
+        ),
     ),
     BlockDefinition(
         "mouse.click",
         "mouse",
         "Click",
         (
-            Param("button", "Button", Type.CHOICE, "left", ("left", "right", "middle")),
+            Param(
+                "button",
+                "Button",
+                Type.CHOICE,
+                "left",
+                MOUSE_BUTTON_CHOICES,
+                choice_labels=MOUSE_BUTTON_LABELS,
+            ),
             Param("count", "Count", Type.INTEGER, 1, minimum=1),
         ),
     ),
@@ -60,19 +80,41 @@ BLOCKS = (
         "mouse.move_by",
         "mouse",
         "Move Cursor By",
-        (Param("dx", "X change", Type.INTEGER, 50), Param("dy", "Y change", Type.INTEGER, 0)),
+        (
+            Param("dx", "X change", Type.INTEGER, 50),
+            Param("dy", "Y change", Type.INTEGER, 0),
+            Param("duration", "Move time", Type.NUMBER, 0.2, minimum=0),
+        ),
     ),
     BlockDefinition(
         "mouse.button_down",
         "mouse",
         "Hold Mouse Button",
-        (Param("button", "Button", Type.CHOICE, "left", ("left", "right", "middle")),),
+        (
+            Param(
+                "button",
+                "Button",
+                Type.CHOICE,
+                "left",
+                MOUSE_BUTTON_CHOICES,
+                choice_labels=MOUSE_BUTTON_LABELS,
+            ),
+        ),
     ),
     BlockDefinition(
         "mouse.button_up",
         "mouse",
         "Release Mouse Button",
-        (Param("button", "Button", Type.CHOICE, "left", ("left", "right", "middle")),),
+        (
+            Param(
+                "button",
+                "Button",
+                Type.CHOICE,
+                "left",
+                MOUSE_BUTTON_CHOICES,
+                choice_labels=MOUSE_BUTTON_LABELS,
+            ),
+        ),
     ),
     BlockDefinition(
         "keyboard.press",
