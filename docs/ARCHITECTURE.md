@@ -62,6 +62,9 @@ behind a small interface.
 - Runtime assets resolve from either the source tree or PyInstaller's bundle
   directory. The generated WAV connection cue is included as a filename-based
   sound, so no Windows system alert alias is invoked.
+- Release packaging is a two-stage process: PyInstaller produces the
+  administrator-manifest single executable, then Inno Setup installs it in
+  Program Files with a stable AppId so future versions upgrade in place.
 - Duplication clones parameter values and only recreates `next`/`child` edges
   whose endpoints are both selected, preventing accidental links back into the
   source graph.

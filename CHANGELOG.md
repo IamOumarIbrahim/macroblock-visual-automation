@@ -8,6 +8,9 @@ All notable changes to Macroblock will be documented here. The format follows
 
 ### Changed
 
+- Reworked the README around a complete application demo and plain-language
+  install, first-automation, control, safety, and troubleshooting guidance.
+
 - Added an always-visible **ADD BLOCK** menu that appends each selection to the
   last-added block while leaving the first block unconnected.
 - Improved palette dragging with a visible drag preview, hotspot-correct drop
@@ -44,6 +47,10 @@ All notable changes to Macroblock will be documented here. The format follows
   cursor destination executes in order.
 
 ### Added
+
+- Added a versioned Inno Setup 6 wizard with Start Menu and desktop shortcuts,
+  launch-after-install, administrator installation, and a reproducible
+  PowerShell build command.
 
 - Alt+click duplication, block context-menu duplication, multi-selection
   duplication from the canvas, and palette double-click auto-add.

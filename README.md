@@ -1,41 +1,115 @@
 # Macroblock
 
+Build useful Windows automations by snapping colorful blocks together—no
+programming required.
+
+![Macroblock showing a complete visual automation with connected and nested blocks](Demo.png)
+
 [![CI](https://github.com/IamOumarIbrahim/macroblock/actions/workflows/ci.yml/badge.svg)](https://github.com/IamOumarIbrahim/macroblock/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB.svg)](https://www.python.org/)
+[![Windows 10/11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4.svg)](https://www.microsoft.com/windows/)
 
-Macroblock is an open-source Windows desktop application for building local
-mouse and keyboard automations from color-coded, Scratch-style blocks. Drag a
-block from the categorized palette, edit values directly on the block, snap it
-into a sequence, and run the result without writing code.
+Macroblock is a visual automation app for Windows 10 and 11. You choose an
+action, place it on the canvas, change its options, and connect it to the next
+action. Macroblock then follows those blocks from top to bottom.
 
-## Features
+Everything runs locally on your computer. Macroblock does not upload your
+scripts, coordinates, typed text, or other automation data.
 
-- Smooth or instant mouse movement, five-button clicks/holds/releases, drags,
-  and scrolling through Win32 `SendInput`
-- Key presses, Unicode text, key combinations, and in-block chord recording
-- Waits, counted and until-stopped loops, variables, and event entry blocks
-- Expandable C-shaped loops that visibly encapsulate complete block stacks,
-  including other nested loops
-- Numbered blocks, high-contrast connection arrows, snap previews, drag glow,
-  combination pulse/wooden-snap feedback, zooming, and space-drag panning
-- Duplicate one block with Alt+click, or duplicate a multi-selection while
-  preserving its internal links
-- System automation for files, folders, URLs, programs, and multiline
-  PowerShell scripts
-- A global safety abort: hold **Esc for 0.5 seconds** while a script is running
-- A topmost, click-through crosshair with live physical-pixel coordinates
-- Versioned, local-only `.mbk` save files
-- Per-Monitor-V2 DPI awareness for mixed-DPI and multi-monitor desktops
+## What can I automate?
 
-Macroblock never uploads or transmits scripts. Coordinates, typed text, and all
-other automation data remain in the save files you choose on your computer.
+Macroblock can:
 
-## Install and run from source
+- Move, click, drag, and scroll the mouse—including previous, forward, and
+  scroll-wheel buttons.
+- Press, hold, release, and combine keyboard keys, or type complete text.
+- Wait for a chosen amount of time and repeat a group of actions.
+- Open files, folders, websites, and programs.
+- Wait for a hotkey or a file to appear.
+- Store simple values and make decisions with them.
+- Run a PowerShell script when an advanced automation needs one.
 
-Requirements: Windows 10 or 11, Git, 64-bit Python 3.11 or newer, and an
-administrator account. Macroblock always requests elevation at startup because
-input injection and system automation must run at a consistent integrity level.
+## Install with the Setup Wizard
+
+1. Open `Macroblock-Setup-<version>.exe`.
+2. Approve the Windows administrator prompt.
+3. Follow the Setup Wizard and keep **Create a desktop icon** selected if you
+   want a shortcut.
+4. Select **Launch Macroblock** on the final page.
+
+Macroblock always runs as administrator. This is required so its simulated
+mouse and keyboard input works consistently with other elevated Windows apps.
+Only open `.mbk` files and run PowerShell blocks that you trust.
+
+If you are building the installer yourself, see [Build from source](#build-from-source).
+
+## Create your first automation
+
+1. Select a category on the left, such as **Mouse**, **Keyboard**, or
+   **Timing**.
+2. Drag a block onto the canvas. You can also double-click it or use the
+   always-visible **ADD BLOCK** button.
+3. Change the values directly inside the block.
+4. Move blocks close together until the green snap preview appears, then
+   release them to connect.
+5. Put actions inside a Repeat block by dropping them into its open middle.
+6. Select **Run Script**.
+7. Hold **Esc for 0.5 seconds** whenever you need to stop the automation.
+
+Use **Save** to create a local `.mbk` file and **Load** to reopen it later.
+
+## Helpful controls
+
+| What you want to do | Control |
+| --- | --- |
+| Move a block or connected stack | Drag its **DRAG** handle |
+| Add after the newest block | Use **ADD BLOCK** or double-click a palette block |
+| Duplicate one block | Hold **Left Alt** and click the block |
+| Duplicate several blocks | Select them, then right-click empty canvas space |
+| Record a key or key combination | Click the red dot, press the keys, then release |
+| Cancel key recording | Press **Esc** or click the red dot again |
+| Move around a large canvas | Hold **Space** and left-drag |
+| Zoom | Use the toolbar or hold **Ctrl** and scroll |
+| Stop a running automation | Hold **Esc for 0.5 seconds** |
+
+The numbered badges and blue connection arrows show the execution order.
+Blocks glow while moving, pulse when connected, and play a short wooden snap
+when they lock together.
+
+## Block categories
+
+| Category | Includes |
+| --- | --- |
+| Mouse | Move, click, drag, scroll, hold, and release |
+| Keyboard | Press, type, combine, hold, and release |
+| Timing | Fixed and random waits |
+| Control | Repeat, repeat forever, conditions, and stop |
+| Variables | Set, change, and delete saved values |
+| Events | Start, hotkey, and file-wait triggers |
+| System | Open a path or URL, launch a program, and run PowerShell |
+
+Coordinates outside every connected monitor are safely skipped. Macroblock
+also refuses to run a script if its global Esc safety monitor cannot start.
+
+## If something does not work
+
+- **Windows asks for permission:** choose **Yes**. Macroblock requires
+  administrator access for reliable input automation.
+- **A block seems to be skipped:** check its numbered badge and blue arrow. An
+  unconnected block is a separate sequence.
+- **The mouse jumps too quickly:** increase **Move time** on the movement block.
+- **A coordinate does nothing:** use **Show Cursor** to confirm the point is on
+  a connected monitor.
+- **A script will not stop:** hold **Esc**, rather than tapping it, for at least
+  half a second.
+- **Windows SmartScreen appears:** locally built installers are not digitally
+  signed. Only continue when the installer came from this repository or a
+  source you trust.
+
+## Build from source
+
+This section is for developers and contributors. You need Windows 10 or 11,
+Git, an administrator account, and 64-bit Python 3.11 or newer.
 
 ```powershell
 git clone https://github.com/IamOumarIbrahim/macroblock.git
@@ -47,53 +121,28 @@ py -3.11 -m venv .venv
 ```
 
 Using the virtual environment's Python directly avoids PowerShell execution
-policy changes. Contributors who prefer activation can instead run
-`.\.venv\Scripts\Activate.ps1`, followed by `python -m macroblock`.
+policy changes.
 
-## Use
+### Build the portable executable
 
-1. Choose a category at left and drag blocks onto the canvas, or use the
-   always-visible **ADD BLOCK** menu. Double-clicking a palette block also adds
-   it after the last canvas block.
-2. **ADD BLOCK** appends to the last block automatically. Dragged blocks show a
-   green snap preview when they are close enough to interlock.
-3. Drag a block into a loop's open cavity to nest it. The loop expands around
-   its child stack; drop at its lower connector to place the block after it.
-4. Moving a connected block moves its entire child/next stack. Dropping on an
-   occupied connector inserts the stack without discarding existing blocks.
-5. Use the visible **DRAG** grip to reposition a block stack. Hold Space and
-   left-drag the canvas to pan; use Ctrl+wheel or the toolbar to zoom.
-6. Alt+click a block to duplicate it. For several blocks, select them and
-   right-click empty canvas space to duplicate the selection and its links.
-7. Edit numbers, text, choices, key lists, paths, URLs, and multiline scripts
-   directly on each block. The arrow buttons on numeric fields increment and
-   decrement their value. The red dot on Key Combo, Hold Key, and Release Key
-   records and replaces the current key value; press Esc to cancel recording.
-8. Select a block and press Delete, or right-click it for duplicate,
-   disconnect, and delete operations.
-9. Choose **Run Script**. A **When Hotkey Pressed** entry waits for its hotkey;
-   hold **Esc for 0.5 seconds** at any time to abort.
-10. Use **Show Cursor** to read screen coordinates without blocking clicks.
-11. Save and load local scripts with the `.mbk` format.
+```powershell
+.\scripts\build.ps1
+```
 
-## Built-in automation blocks
+This creates `dist\Macroblock.exe`. It is a single-file application with the
+administrator requirement, icon, and wooden connection sound built in.
 
-- **Mouse:** smooth absolute/relative movement, five-button click/hold/release
-  (including previous, forward, and wheel click), drag, and scroll
-- **Keyboard:** key press, text entry, key combinations, and key hold/release
-- **Timing:** fixed and randomized interruptible waits
-- **Control:** counted/forever loops, variable conditions, and stop
-- **Variables:** set, change, and delete
-- **Events:** script start, hotkey entry/wait, and wait until a file exists
-- **System:** open a file/folder, open a URL, launch a program, and run a
-  multiline PowerShell script
+### Build the Setup Wizard
 
-Coordinates outside every connected monitor are skipped and logged instead of
-being sent. Macroblock also refuses to start execution if its global abort
-monitor cannot be activated.
+Install [Inno Setup 6](https://jrsoftware.org/isinfo.php), then run:
 
-System and PowerShell blocks intentionally run with Macroblock's elevated
-permissions. Only open `.mbk` files and run scripts you trust.
+```powershell
+.\scripts\build_installer.ps1
+```
+
+The script builds the application first and then creates
+`dist\installer\Macroblock-Setup-<version>.exe`. To reuse an existing
+`dist\Macroblock.exe`, add `-SkipAppBuild`.
 
 ## Test
 
@@ -101,45 +150,25 @@ permissions. Only open `.mbk` files and run scripts you trust.
 .\.venv\Scripts\python.exe -m pytest
 ```
 
-The normal suite does not simulate live clicks or Alt+Tab. The explicit Windows
-verification scripts are:
+The automated suite does not perform live clicks. The optional Windows
+verification scripts in `tests` briefly take input focus and should only be
+run when that is safe.
 
-```powershell
-.\.venv\Scripts\python.exe tests\verify_phase3_windows.py
-.\.venv\Scripts\python.exe tests\verify_phase4_windows.py
-.\.venv\Scripts\python.exe tests\verify_phase5_reopen.py
-```
+## Project layout
 
-These scripts briefly take input focus, so run them only when that is safe.
-
-## Build the single-file executable
-
-After installing the development dependencies:
-
-```powershell
-.\scripts\build.ps1
-```
-
-The reproducible build script regenerates the icon and writes
-`dist\Macroblock.exe`. PyInstaller bundles Python and all runtime dependencies;
-the resulting executable does not require Python or a virtual environment on
-the destination Windows machine. Its embedded manifest requires administrator
-elevation, so Windows displays a UAC prompt before the application opens.
-
-## Project structure
-
-- `src/macroblock/blocks`: data-driven definitions and graph model
-- `src/macroblock/ui`: palette, inline editors, canvas, and main window
-- `src/macroblock/engine`: interpreter, safety monitor, and Win32 input
+- `src/macroblock/blocks`: block definitions and saved-script graph
+- `src/macroblock/ui`: palette, block editors, canvas, and main window
+- `src/macroblock/engine`: script runner and Windows input simulation
 - `src/macroblock/overlay`: click-through cursor crosshair
-- `src/macroblock/persistence`: atomic local `.mbk` save/load
-- `docs/ARCHITECTURE.md`: design decisions and future ideas
+- `src/macroblock/persistence`: local `.mbk` save and load
+- `installer`: Inno Setup Wizard definition
+- `docs/ARCHITECTURE.md`: technical design decisions
 
-Macroblock is available under the MIT License.
-
-## Contributing and support
+## Contributing, help, and license
 
 Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before
-opening a pull request, use [SUPPORT.md](SUPPORT.md) for help, and report
-security-sensitive issues according to [SECURITY.md](SECURITY.md). Everyone
+opening a pull request. Use [SUPPORT.md](SUPPORT.md) for help and
+[SECURITY.md](SECURITY.md) for security-sensitive reports. Everyone
 participating in the project must follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+Macroblock is available under the [MIT License](LICENSE).

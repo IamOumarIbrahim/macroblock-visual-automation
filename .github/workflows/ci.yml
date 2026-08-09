@@ -47,3 +47,11 @@ jobs:
         run: |
           .\scripts\build.ps1
           if (-not (Test-Path dist\Macroblock.exe)) { throw "Executable missing" }
+      - name: Install Inno Setup
+        shell: powershell
+        run: choco install innosetup --yes --no-progress
+      - name: Build Setup Wizard
+        shell: powershell
+        run: |
+          .\scripts\build_installer.ps1 -SkipAppBuild
+          if (-not (Test-Path dist\installer\Macroblock-Setup-*.exe)) { throw "Installer missing" }
