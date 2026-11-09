@@ -46,6 +46,10 @@ Run tests:
 .\.venv\Scripts\python.exe -m pytest
 ```
 
+## Help the project
+
+Did this help you? Please give it a **star**, so more people can find it. Bugs and ideas are welcome in [Issues](https://github.com/IamOumarIbrahim/macroblock-visual-automation/issues).
+
 ## License
 
 Available under the [MIT License](LICENSE).
